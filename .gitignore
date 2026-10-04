@@ -1,0 +1,12 @@
+node_modules/
+out/
+dist/
+.env
+data/
+*.log
+*.tsbuildinfo
+.DS_Store
+backend/crawlers/__pycache__/
+.venv/
+build/
+*.db

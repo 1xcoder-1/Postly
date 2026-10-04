@@ -1,0 +1,60 @@
+# electron-builder configuration — https://www.electron.build
+# Packaging produces installers for Windows, macOS and Linux using only
+# free/open tooling. The renderer talks to the OS solely through IPC, so no
+# special entitlements are required for the MVP.
+
+appId: com.postly.app
+productName: Postly
+copyright: MIT — Postly
+
+directories:
+  buildResources: build
+  output: release
+
+# Everything electron-vite compiles lives in out/. backend/ TS is bundled into
+# out/main, so only the compiled output + package.json need to ship.
+files:
+  - out/**
+  - package.json
+
+# The Python crawlers and the window/dock icon are not part of the JS bundle,
+# so copy them next to the executable as loose resources (read from
+# process.resourcesPath at runtime — see backend/paths.ts).
+extraResources:
+  - from: backend/crawlers
+    to: backend/crawlers
+    filter: ['**/*.py', '**/requirements.txt', '**/references.json']
+  - from: build/icon.png
+    to: icon.png
+
+# Local JSON fallback store, encrypted keys and AI usage live in userData when
+# packaged, so nothing is ever written inside the (read-only) install dir.
+
+asar: true
+npmRebuild: false
+
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+    - portable
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+
+mac:
+  icon: build/icon.png
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+
+linux:
+  icon: build/icon.png
+  category: Utility
+  target:
+    - AppImage
+    - deb

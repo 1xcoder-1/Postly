@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Baseline CSP. This meta is deliberately dev-tolerant (it allows inline
+      scripts so the Vite HMR / React Refresh preamble works). In production the
+      main process additionally sends a stricter `script-src 'self'` header, and
+      the browser enforces the intersection, so inline scripts end up blocked in
+      the shipped app. Renderer makes NO direct network calls — everything goes
+      through IPC to the main process — hence the tight connect-src.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://image.pollinations.ai; font-src 'self' data:; connect-src 'self' ws://localhost:5173 http://localhost:5173; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Postly</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

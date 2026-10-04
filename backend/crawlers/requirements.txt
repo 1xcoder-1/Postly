@@ -1,0 +1,55 @@
+# Postly crawler dependencies.
+#
+# Every crawler degrades gracefully: a missing package or unset env var makes
+# that source return [] — the app always runs with ZERO of these installed.
+#
+# ── Always works (Python standard library only, no pip needed) ──────────────
+#   hn_crawler.py         Hacker News via the free Algolia API (HN_HITS/HN_DAYS/
+#                         HN_MIN_POINTS tune volume)
+#   dailydev_crawler.py   dev.to RSS/Atom feed (repoints the retired daily.dev
+#                         GraphQL; DEVTO_MAX/DEVTO_TAGS tune volume)
+#   bsky_crawler.py       Bluesky via the public AT Protocol API (no key/account;
+#                         seed in references.json -> bsky, extend BLUESKY_AUTHORS/
+#                         BLUESKY_QUERIES)
+#   agent_reach_crawler.py  RSS/V2EX/HN + `agent-reach doctor` status
+#   lang.py               shared English-only + tutorial-style text filters (no deps)
+#
+# ── YouTube (reference-driven, LIVE) — needs yt-dlp ─────────────────────────
+#   youtube_crawler.py turns your references.json / YT_REFS links + channels into
+#   live topics. Replaces the old youtube.com/feeds/videos.xml Atom path (404 now).
+#     pip install yt-dlp
+#     opt-in refs:  YT_REFS=https://youtu.be/ID,@handle,Channel Name
+#     (blank -> uses references.json -> youtube.videos / .channels)
+#
+# ── LinkedIn / any tech link (agent-reach web = Jina Reader, no key) ─────────
+#   linkedin_crawler.py mirrors public URLs you list into topics.
+#     opt-in:  LINKEDIN_REFS=https://www.linkedin.com/posts/...   (or references.json -> linkedin.posts)
+#
+# ── Reddit (PRAW) — needs free app credentials ──────────────────────────────
+praw>=7.7.0
+#   env: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USER_AGENT
+#   custom subs: REDDIT_SUBREDDITS=artificial,machinelearning,webdev,LocalLLaMA
+#
+# ── General web / news / daily.dev deep scraping (Crawl4AI) — optional ──────
+# crawl4ai>=0.4.0
+#   then run once:  crawl4ai-setup        (installs the headless browser)
+#   opt-in URLs:    CRAWL4AI_URLS=https://news.ycombinator.com,https://daily.dev
+#
+# ── X / Twitter (twscrape) — optional, needs a configured account ───────────
+# twscrape>=0.8
+#   then:  twscrape add_accounts   (or: twscrape add_cookie <auth_token>)
+#   seed list of famous accounts/queries lives in references.json -> x
+#   extend:  X_ACCOUNTS=karpathy,OpenAI,Vercel   X_QUERIES=AI agents, developer tools
+#   (pulls latest posts per account via user_tweets + search per query)
+#
+# ── Instagram (Instaloader) — optional, rate-limited, English-filtered ───────
+# instaloader>=4.14
+#   opt-in:  IG_PROFILES=github,stripe,openai   (else references.json -> instagram.profiles)
+#   login to beat the anonymous rate-limit wall:  IG_USER / IG_PASSWORD
+#   or ingest an export you already have:         IG_EXPORT_FILES=C:/dl/posts.json
+#
+# ── Agent Reach capability layer (https://github.com/Panniantong/agent-reach)
+# Install from GitHub, NOT PyPI (the PyPI namesake is a different package):
+#   pip install "https://github.com/Panniantong/agent-reach/archive/main.zip" yt-dlp
+#   agent-reach install --env=auto            # read-only health check
+#   agent-reach install --env=auto --system   # after you approve system changes

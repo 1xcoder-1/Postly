@@ -1,0 +1,1 @@
+ALTER TABLE "posts" ADD COLUMN "publication" jsonb DEFAULT '{}'::jsonb NOT NULL;
