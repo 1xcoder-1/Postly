@@ -1,21 +1,15 @@
 import { useState, useEffect } from 'react'
 import {
-  Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   Plus,
   CalendarPlus,
   Download,
-  Share2,
   Clock,
   MapPin,
-  CheckCircle2,
-  Filter,
   ExternalLink,
-  Sparkles,
   CalendarDays,
-  Send,
-  Layers
+  CheckCircle2
 } from 'lucide-react'
 import { Button } from '@/renderer/components/ui/button'
 import { usePosts } from '@/renderer/store'
@@ -167,65 +161,61 @@ export default function CalendarPage() {
   }
 
   const categoryBadgeColors: Record<string, string> = {
-    'town-hall': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-    'live-class': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    'hackathon': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-    'project': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    'dsa': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    'general': 'bg-zinc-700/30 text-zinc-300 border-zinc-600/30'
+    'town-hall': 'bg-purple-500/15 text-purple-400',
+    'live-class': 'bg-emerald-500/15 text-emerald-500',
+    'hackathon': 'bg-primary/15 text-primary',
+    'project': 'bg-blue-500/15 text-blue-400',
+    'dsa': 'bg-warning/15 text-warning',
+    'general': 'bg-secondary/60 text-muted-foreground'
   }
+
+  const fieldCls =
+    'w-full rounded-lg border border-input bg-zinc-800/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50'
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 animate-in fade-in duration-200">
-      {/* Header */}
+      {/* Header — MasterJi 22px medium h1 */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+          <h1 className="flex items-center gap-2.5 text-[22px] font-medium tracking-tight text-foreground">
             Calendar & Schedule
-            <span className="flex items-center gap-1 text-xs font-normal rounded-full border border-emerald-500/30 bg-emerald-950/40 text-emerald-400 px-2.5 py-0.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-              Google Calendar Sync Active
+            <span className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-2.5 py-0.5 text-xs font-normal text-muted-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              Google Calendar Sync
             </span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Visual calendar for scheduled social posts, content releases and 1-click Google Calendar integration.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button
-            onClick={handleSyncAllToGoogle}
-            className="rounded-full bg-primary font-medium text-white shadow-lg hover:bg-primary/90"
-          >
-            <CalendarPlus className="mr-1.5 h-4 w-4" />
+          <Button size="sm" onClick={handleSyncAllToGoogle}>
+            <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
             Sync with Google Calendar
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowAddModal(true)}
-            className="rounded-full border-[#2a2a30] hover:border-primary/40 text-zinc-200"
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
+          <Button variant="flat" size="sm" onClick={() => setShowAddModal(true)}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
             Schedule Event
           </Button>
         </div>
       </div>
 
-      {/* Google Calendar Integration Card */}
-      <div className="rounded-2xl border border-[#27272a] bg-gradient-to-r from-[#17171a] via-[#1a1816] to-[#17171a] p-5 shadow-lg">
+      {/* Google Calendar Integration Card — flat MasterJi card */}
+      <div className="rounded-[14px] border border-border bg-card p-5 shadow-sm">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/20 text-primary">
-              <CalendarDays className="h-6 w-6" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <CalendarDays className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-sm">Google Calendar Auto-Sync</h3>
-                <span className="rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.2 text-[10px] font-bold">
+                <h3 className="font-title text-base font-medium tracking-tight text-foreground">Google Calendar Auto-Sync</h3>
+                <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold text-warning">
                   READY
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 Every scheduled post and content reminder creates a 1-click Google Calendar event with pre-filled title, body, and time.
               </p>
             </div>
@@ -235,7 +225,7 @@ export default function CalendarPage() {
               href="https://calendar.google.com"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-zinc-700/60 bg-zinc-800/80 px-3.5 text-xs font-medium text-zinc-200 hover:bg-zinc-700 hover:text-white transition-colors"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-zinc-700/40 px-3.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-700/60 dark:text-zinc-200"
             >
               <span>Open Google Calendar</span>
               <ExternalLink className="h-3 w-3" />
@@ -245,51 +235,36 @@ export default function CalendarPage() {
       </div>
 
       {/* Controls & Filter bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-[#232328] pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={prevMonth}
-            className="h-8 w-8 p-0 rounded-lg border-[#27272a]"
-          >
+          <Button variant="flat" size="icon" onClick={prevMonth} className="h-8 w-8 rounded-full">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="font-bold text-base text-white px-2">
+          <span className="px-2 font-title text-base font-medium text-foreground">
             {monthNames[month]} {year}
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={nextMonth}
-            className="h-8 w-8 p-0 rounded-lg border-[#27272a]"
-          >
+          <Button variant="flat" size="icon" onClick={nextMonth} className="h-8 w-8 rounded-full">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={goToToday}
-            className="h-8 text-xs text-muted-foreground hover:text-white"
-          >
+          <Button variant="ghost" size="sm" onClick={goToToday} className="text-xs">
             Today
           </Button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-[#141416] border border-[#27272a] rounded-xl p-1 text-xs">
+          <div className="flex items-center gap-1 rounded-full bg-secondary/50 p-1 text-xs">
             <button
               onClick={() => setView('month')}
-              className={`px-3 py-1 rounded-lg transition-colors ${
-                view === 'month' ? 'bg-[#232328] text-white font-medium' : 'text-zinc-400 hover:text-white'
+              className={`rounded-full px-3 py-1.5 transition-colors ${
+                view === 'month' ? 'bg-primary font-medium text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Month View
             </button>
             <button
               onClick={() => setView('agenda')}
-              className={`px-3 py-1 rounded-lg transition-colors ${
-                view === 'agenda' ? 'bg-[#232328] text-white font-medium' : 'text-zinc-400 hover:text-white'
+              className={`rounded-full px-3 py-1.5 transition-colors ${
+                view === 'agenda' ? 'bg-primary font-medium text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Agenda List
@@ -300,9 +275,9 @@ export default function CalendarPage() {
 
       {/* Main View */}
       {view === 'month' ? (
-        <div className="rounded-2xl border border-[#232328] bg-[#141417] overflow-hidden shadow-xl">
+        <div className="overflow-hidden rounded-[14px] border border-border bg-card shadow-sm">
           {/* Day Headers */}
-          <div className="grid grid-cols-7 border-b border-[#232328] bg-[#18181c] text-center text-xs font-semibold text-zinc-400 py-2.5">
+          <div className="grid grid-cols-7 border-b border-border bg-secondary/30 py-2.5 text-center text-xs font-medium text-muted-foreground">
             <div>Sun</div>
             <div>Mon</div>
             <div>Tue</div>
@@ -313,10 +288,10 @@ export default function CalendarPage() {
           </div>
 
           {/* Calendar Grid */}
-          <div className="grid grid-cols-7 auto-rows-[115px] divide-x divide-y divide-[#232328]">
+          <div className="grid grid-cols-7 auto-rows-[115px] divide-x divide-y divide-border">
             {/* Blank leading days */}
             {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-              <div key={`blank-${i}`} className="bg-[#111113]/50 p-2 text-zinc-700"></div>
+              <div key={`blank-${i}`} className="p-2 text-muted-foreground/40"></div>
             ))}
 
             {/* Days of Month */}
@@ -332,14 +307,14 @@ export default function CalendarPage() {
               return (
                 <div
                   key={`day-${dayNum}`}
-                  className={`p-2 transition-colors hover:bg-[#18181c] flex flex-col justify-between ${
+                  className={`flex flex-col justify-between p-2 transition-colors hover:bg-white/[0.02] ${
                     isToday ? 'bg-primary/5' : ''
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span
-                      className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-mono font-medium ${
-                        isToday ? 'bg-primary text-white font-bold shadow' : 'text-zinc-300'
+                      className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
+                        isToday ? 'bg-primary font-semibold text-primary-foreground' : 'text-foreground/80'
                       }`}
                     >
                       {dayNum}
@@ -355,9 +330,9 @@ export default function CalendarPage() {
                         key={evt.id}
                         onClick={() => handleAddToGoogleCalendar(evt)}
                         title={`Click to Add "${evt.title}" to Google Calendar`}
-                        className="cursor-pointer truncate rounded-md bg-[#222228] px-1.5 py-0.5 text-[10px] font-medium text-white transition-all hover:bg-primary hover:text-white border border-[#2e2e36]"
+                        className="cursor-pointer truncate rounded-md bg-secondary/80 px-1.5 py-0.5 text-[10px] font-medium text-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
                       >
-                        {evt.startTime && <span className="text-orange-400 mr-1">{evt.startTime}</span>}
+                        {evt.startTime && <span className="mr-1 text-primary">{evt.startTime}</span>}
                         {evt.title}
                       </div>
                     ))}
@@ -373,31 +348,31 @@ export default function CalendarPage() {
           {filteredEvents.map((evt) => (
             <div
               key={evt.id}
-              className="group flex flex-col md:flex-row items-start md:items-center justify-between gap-4 rounded-2xl border border-[#232328] bg-[#141417] p-4 transition-all hover:border-primary/40 hover:bg-[#18181c]"
+              className="group flex flex-col md:flex-row items-start md:items-center justify-between gap-4 rounded-[14px] border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span
-                    className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
                       categoryBadgeColors[evt.category] || categoryBadgeColors.general
                     }`}
                   >
                     {evt.category.replace('-', ' ')}
                   </span>
-                  <span className="text-xs font-mono text-orange-400 flex items-center gap-1">
+                  <span className="flex items-center gap-1 text-xs text-primary">
                     <Clock className="h-3 w-3" />
                     {evt.startDate} {evt.startTime && `· ${evt.startTime}`}
                   </span>
                 </div>
-                <h3 className="font-bold text-sm text-white group-hover:text-primary transition-colors">
+                <h3 className="text-sm font-medium text-foreground transition-colors group-hover:text-primary">
                   {evt.title}
                 </h3>
                 {evt.description && (
-                  <p className="text-xs text-zinc-400 line-clamp-2">{evt.description}</p>
+                  <p className="line-clamp-2 text-xs text-muted-foreground">{evt.description}</p>
                 )}
                 {evt.location && (
-                  <p className="text-[11px] text-zinc-500 flex items-center gap-1 font-mono">
-                    <MapPin className="h-3 w-3 text-zinc-400" /> {evt.location}
+                  <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <MapPin className="h-3 w-3" /> {evt.location}
                   </p>
                 )}
               </div>
@@ -405,16 +380,12 @@ export default function CalendarPage() {
               <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                 <button
                   onClick={() => downloadIcsFile(evt)}
-                  className="rounded-xl border border-[#2c2c34] px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+                  className="rounded-full bg-zinc-700/40 px-3 py-1.5 text-xs text-zinc-700 transition-colors hover:bg-zinc-700/60 dark:text-zinc-200"
                 >
-                  <Download className="inline-block mr-1 h-3.5 w-3.5" />
+                  <Download className="mr-1 inline-block h-3.5 w-3.5" />
                   .ics
                 </button>
-                <Button
-                  size="sm"
-                  onClick={() => handleAddToGoogleCalendar(evt)}
-                  className="rounded-xl bg-primary text-xs font-medium text-white hover:bg-primary/90"
-                >
+                <Button size="sm" onClick={() => handleAddToGoogleCalendar(evt)}>
                   <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
                   Add to Google Calendar
                 </Button>
@@ -427,80 +398,74 @@ export default function CalendarPage() {
       {/* Add Event Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-lg rounded-2xl border border-[#27272a] bg-[#141416] p-6 shadow-2xl">
-            <h2 className="text-lg font-bold text-white mb-1">Schedule Content & Event</h2>
-            <p className="text-xs text-muted-foreground mb-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <h2 className="mb-1 text-lg font-medium tracking-tight text-foreground">Schedule Content & Event</h2>
+            <p className="mb-4 text-xs text-muted-foreground">
               Add a social publishing schedule or content milestone and sync to Google Calendar.
             </p>
 
             <form onSubmit={handleCreateEvent} className="space-y-3.5">
               <div>
-                <label className="text-xs font-medium text-zinc-300 block mb-1">Schedule Title *</label>
+                <label className="mb-1 block text-xs font-medium text-zinc-300">Schedule Title *</label>
                 <input
                   type="text"
                   required
                   value={newEvent.title}
                   onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
                   placeholder="e.g. Publish DeepSeek R1 Analysis Thread"
-                  className="w-full rounded-xl border border-[#27272a] bg-[#18181c] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  className={fieldCls}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 block mb-1">Date *</label>
+                  <label className="mb-1 block text-xs font-medium text-zinc-300">Date *</label>
                   <input
                     type="date"
                     required
                     value={newEvent.startDate}
                     onChange={(e) => setNewEvent({ ...newEvent, startDate: e.target.value })}
-                    className="w-full rounded-xl border border-[#27272a] bg-[#18181c] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    className={fieldCls}
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 block mb-1">Time</label>
+                  <label className="mb-1 block text-xs font-medium text-zinc-300">Time</label>
                   <input
                     type="time"
                     value={newEvent.startTime}
                     onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })}
-                    className="w-full rounded-xl border border-[#27272a] bg-[#18181c] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    className={fieldCls}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-medium text-zinc-300 block mb-1">Platforms / Target</label>
+                <label className="mb-1 block text-xs font-medium text-zinc-300">Platforms / Target</label>
                 <input
                   type="text"
                   value={newEvent.location}
                   onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
                   placeholder="X, LinkedIn, Threads, Instagram"
-                  className="w-full rounded-xl border border-[#27272a] bg-[#18181c] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  className={fieldCls}
                 />
               </div>
 
               <div>
-                <label className="text-xs font-medium text-zinc-300 block mb-1">Notes / Description</label>
+                <label className="mb-1 block text-xs font-medium text-zinc-300">Notes / Description</label>
                 <textarea
                   rows={3}
                   value={newEvent.description}
                   onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
                   placeholder="Key talking points, hashtags, attachments..."
-                  className="w-full rounded-xl border border-[#27272a] bg-[#18181c] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  className={fieldCls}
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#232328]">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowAddModal(false)}
-                  className="rounded-xl border-[#2a2a30]"
-                >
+              <div className="flex justify-end gap-2 border-t border-border pt-3">
+                <Button type="button" variant="flat" size="sm" onClick={() => setShowAddModal(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" className="rounded-xl bg-primary text-white hover:bg-primary/90">
+                <Button type="submit" size="sm">
                   Save & Sync
                 </Button>
               </div>

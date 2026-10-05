@@ -13,10 +13,10 @@ export function Skeleton({ className }: { className?: string }) {
 /** Card-shaped skeleton used while AI variants are being generated. */
 export function VariantCardSkeleton() {
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-card">
+    <div className="rounded-[14px] border border-border bg-card p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <Skeleton className="h-5 w-24" />
-        <Skeleton className="h-8 w-20 rounded-lg" />
+        <Skeleton className="h-8 w-20 rounded-full" />
       </div>
       <Skeleton className="mb-2 h-4 w-full" />
       <Skeleton className="mb-4 h-4 w-4/5" />

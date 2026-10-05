@@ -42,7 +42,7 @@ export function CharCounter({
     <span
       className={cn(
         'font-mono text-[11px] tabular-nums',
-        over ? 'text-rose-400' : near ? 'text-amber-500' : 'text-muted-foreground',
+        over ? 'text-rose-500' : near ? 'text-amber-500' : 'text-muted-foreground',
         className
       )}
     >
@@ -83,7 +83,7 @@ export function PostPreview(props: PostPreviewProps) {
   const truncated = over ? withTags.slice(0, limit) : withTags
 
   return (
-    <div className="rounded-xl border bg-card shadow-card">
+    <div className="rounded-[14px] border border-border bg-card shadow-card">
       <div className="flex items-center gap-1 border-b p-2">
         {PLATFORMS.map((p) => (
           <button
@@ -91,7 +91,7 @@ export function PostPreview(props: PostPreviewProps) {
             type="button"
             onClick={() => setPlatform(p)}
             className={cn(
-              'rounded-md px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors',
+              'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
               p === platform
                 ? 'bg-primary/15 text-primary'
                 : 'text-muted-foreground hover:bg-muted'
@@ -104,17 +104,17 @@ export function PostPreview(props: PostPreviewProps) {
 
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 font-mono text-sm font-bold text-primary">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary font-num text-sm font-semibold text-primary-foreground">
             P
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">Postly</span>
+              <span className="text-sm font-medium">Postly</span>
               <Badge variant="outline" className="text-[10px]">@postly</Badge>
             </div>
             <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
               {truncated || <span className="text-muted-foreground">Start typing to see a preview…</span>}
-              {over && <span className="text-rose-400">…</span>}
+              {over && <span className="text-rose-500">…</span>}
             </p>
           </div>
         </div>
@@ -129,7 +129,7 @@ export function PostPreview(props: PostPreviewProps) {
 
         <div className="mt-3 flex items-center justify-between border-t pt-2">
           <CharCounter value={withTags} limit={limit} />
-          {over && <span className="text-[11px] text-rose-400">over limit on {PLATFORM_LABEL[platform]}</span>}
+          {over && <span className="text-[11px] text-rose-500">over limit on {PLATFORM_LABEL[platform]}</span>}
         </div>
       </div>
     </div>

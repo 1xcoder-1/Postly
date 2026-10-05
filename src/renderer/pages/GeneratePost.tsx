@@ -101,7 +101,7 @@ export default function GeneratePost() {
   const [saving, setSaving] = useState<null | PostStatus>(null)
 
   useEffect(() => {
-    api.aiStatus().then((s) => setModels(s.models)).catch(() => {})
+    api.aiStatus().then((s) => setModels(s.models)).catch(() => { })
     loadSuggestions(false)
     // Apply the user's saved defaults (tone/platform/style).
     api
@@ -116,7 +116,7 @@ export default function GeneratePost() {
         if (prefs.defaultStyle) setDefaultStyle(prefs.defaultStyle)
         if (prefs.carouselDefault === 'on') setCarousel(true)
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   // Debounced autosave of the working state so a refresh/accidental close
@@ -180,7 +180,7 @@ export default function GeneratePost() {
       const picks = [...t]
       for (let i = picks.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1))
-        ;[picks[i], picks[j]] = [picks[j], picks[i]]
+          ;[picks[i], picks[j]] = [picks[j], picks[i]]
       }
       setSuggestions(picks.slice(0, 6))
       if (!t.length) toast('No suggestions found right now')
@@ -286,9 +286,66 @@ export default function GeneratePost() {
             </Button>
           </div>
 
+          {/* Blueprint & Comparison Quick Starters */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 self-center text-xs font-medium text-muted-foreground">Blueprints:</span>
+            {[
+              {
+                label: 'AI Agent (n8n + MCP)',
+                topic: 'How to build autonomous AI agents with n8n, LangGraph & MCP: Step-by-Step Architecture'
+              },
+              {
+                label: 'LLM Core & RAG',
+                topic: 'LLM Deep-Dive: Quantization (GGUF/AWQ), Attention Mechanisms & Agentic RAG in 2026'
+              },
+              {
+                label: 'GraphQL vs gRPC vs REST',
+                topic: 'System Design Battle: GraphQL vs gRPC vs REST in 2026 (When to use which)'
+              },
+              {
+                label: 'PostgreSQL vs MongoDB',
+                topic: 'Database Architecture Comparison: PostgreSQL vs MongoDB at Scale'
+              },
+              {
+                label: 'Redis vs Dragonfly',
+                topic: 'High-Throughput Caching Teardown: Redis vs Dragonfly vs KeyDB vs Memcached'
+              },
+              {
+                label: 'Scale 100K Stack',
+                topic: 'Modern full-stack tech architecture to scale from 1K to 100K+ users: Next.js 15, Drizzle, Postgres & Redis'
+              },
+              {
+                label: 'Open-Source Replacements',
+                topic: 'Top 10 Open-Source GitHub tools that replace expensive paid SaaS (n8n, Supabase, PostHog, Cal.com, Documenso)'
+              },
+              {
+                label: 'UI & Component Kits',
+                topic: 'Best modern developer UI component libraries and visual inspiration: Shadcn UI, Aceternity, 21st.dev & Magic UI'
+              },
+              {
+                label: 'Free Dev Fonts',
+                topic: 'Top 5 free developer fonts for clean code, dashboards, and modern UI (Geist Mono, Inter, Outfit, Fira Code)'
+              },
+              {
+                label: 'Web Performance & Edge',
+                topic: 'Frontend Optimization Masterclass: Core Web Vitals, Edge Compute, Font Loading & Bundle Splitting'
+              }
+            ].map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => setTopic(p.topic)}
+                className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/15 transition-all"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+
           {suggestions.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <span className="eyebrow mr-1 self-center">Suggested</span>
+              <span className="mr-1 self-center text-xs font-medium text-muted-foreground">Live Crawled</span>
               {suggestions.map((s) => (
                 <button
                   key={s.url ?? s.title}
@@ -388,7 +445,7 @@ export default function GeneratePost() {
             {image && (
               <div className="mb-6">
                 <Label>Generated image</Label>
-                <img src={image} alt="post" className="mt-1.5 max-h-64 rounded-xl border object-cover" />
+                <img src={image} alt="post" className="mt-1.5 max-h-64 rounded-lg border border-border object-cover" />
               </div>
             )}
 
@@ -453,7 +510,7 @@ export default function GeneratePost() {
                         />
                       )}
                       <div className="p-3">
-                        <div className="font-semibold">{s.index}. {s.title}</div>
+                        <div className="font-medium">{s.index}. {s.title}</div>
                         <div className="mt-1 text-muted-foreground">{s.body}</div>
                       </div>
                     </div>
@@ -462,7 +519,7 @@ export default function GeneratePost() {
               </Card>
             )}
 
-            <div className="mt-6 rounded-xl border bg-card p-4">
+            <div className="mt-6 rounded-[14px] border border-border bg-card p-4 shadow-sm">
               <Label>Platforms for this post</Label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {PLATFORMS.map((p) => {
@@ -491,7 +548,7 @@ export default function GeneratePost() {
               )}
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="mt-6 flex flex-col gap-3 rounded-[14px] border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between">
               <div className="flex items-end gap-2">
                 <div>
                   <Label htmlFor="scheduleAt">Schedule for</Label>

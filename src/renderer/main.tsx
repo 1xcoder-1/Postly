@@ -2,6 +2,18 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { toast } from 'sonner'
 import App from './App'
+// MasterJi font stack (bundled so the app works fully offline)
+import '@fontsource/inter/400.css'
+import '@fontsource/inter/500.css'
+import '@fontsource/inter/600.css'
+import '@fontsource/inter/700.css'
+import '@fontsource/montserrat/500.css'
+import '@fontsource/montserrat/600.css'
+import '@fontsource/palanquin/500.css'
+import '@fontsource/palanquin/600.css'
+import '@fontsource/palanquin/700.css'
+import '@fontsource/plus-jakarta-sans/500.css'
+import '@fontsource/plus-jakarta-sans/600.css'
 import './globals.css'
 
 // Last-resort safety net: any error or rejected promise that escapes a
