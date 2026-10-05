@@ -10,3 +10,4 @@ backend/crawlers/__pycache__/
 .venv/
 build/
 *.db
+open-slide-demo/

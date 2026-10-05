@@ -42,23 +42,21 @@ _ROMANIZED = {
 
 _WORD = re.compile(r"[a-z']+")
 
-# Tutorial/how-to/course style titles. The user wants tech/AI INDUSTRY NEWS and
-# breakthroughs, NOT "Python tutorial / day 1 / build a web app / crash course"
-# learn-to-code content. This is deliberately specific (it targets the actual
-# how-to phrasings) so it doesn't drop legit news like "How GPT-5 reasons".
+# Tutorial/how-to/course style titles. Beginner learn-to-code spam (e.g. "day 1
+# python crash course for absolute beginners") is filtered, while legitimate
+# engineering roadmaps, architectures, and deep dives are preserved.
 _TUTORIAL = re.compile(
     r"""(?ix)
-      \btutorials?\b | \bcourse[s]?\b | \bcrash\s+course\b | \bbootcamp\b | \broadmap\b
+      \bcrash\s+course\b | \bbootcamp\b
     | \bfor\s+beginners?\b | \bbeginners?\b | \blec?t?ure\b | \blesson\b
     | \bday\s*\d+\b | \bday\s+one\b
     | \bpart\s*\d+\b | \bep(?:isode)?\.?\s*\d+\b
     | \bin\s+one\s+video\b | \bin\s+\d+\s*(?:minutes?|hours?|days?)\b
     | \blearn\s+(?:to\s+)?(?:python|javascript|java|c\+\+|golang|go|rust|react|html|css|sql
         |node(?:\.?js)?|next(?:\.?js)?|typescript|django|flask|spring|docker|kubernetes|aws
-        |machine\s+learning|deep\s+learning|ai|dsa|data\s+structures|system\s+design)\b
-    | \bbuild\s+(?:a|an|your|this)\b | \bweb\s?app\b | \bportfolio\s+(?:project|website)\b
+        |machine\s+learning|deep\s+learning|dsa|data\s+structures)\b
+    | \bportfolio\s+(?:project|website)\b
     | \d+\s+projects?\b | \binterview\s+questions\b | \bcertification\b
-    | \bhow\s+to\s+(?:make|create|build|use|install|setup|set\s+up)\b
     """
 )
 

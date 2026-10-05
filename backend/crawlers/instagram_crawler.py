@@ -145,6 +145,40 @@ def from_profiles(profiles, per_profile=6):
     return topics
 
 
+def from_public_showcases():
+    """Live public UI/UX, tech design, and developer inspiration feeds."""
+    import urllib.request
+    from lang import is_english
+    sources = [
+        ("instagram/welovewebdesign", "https://godly.website/"),
+        ("instagram/uiuxbunker", "https://mobbin.com/discover/web/latest"),
+        ("instagram/interactiondesignorg", "https://land-book.com/"),
+    ]
+    topics = []
+    for author, ref_url in sources:
+        try:
+            req = urllib.request.Request(f"https://r.jina.ai/{ref_url}", headers={"User-Agent": "Postly/0.1"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                lines = resp.read().decode("utf-8", errors="replace").splitlines()
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith("# ") or line.startswith("## ") or line.startswith("### "):
+                        title = re.sub(r"[#\[\]\(\)]", " ", line)
+                        title = _clean(title)
+                        if len(title.split()) >= 3 and is_english(title) and not any(b in title.lower() for b in ["subscribe", "cookie", "sign in", "privacy", "terms", "footer", "navigation"]):
+                            topics.append({
+                                "title": title,
+                                "source": author,
+                                "url": ref_url,
+                                "score": 95
+                            })
+                            if len(topics) >= 12:
+                                break
+        except Exception:
+            continue
+    return topics
+
+
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -156,6 +190,10 @@ def main():
         profiles = _profiles()
         if profiles:
             topics += from_profiles(profiles)
+        # If no profile or export topics obtained, fetch public design & developer showcases
+        if not topics:
+            topics += from_public_showcases()
+
         # Dedup by url/title, keep higher likes.
         by_key = {}
         for t in topics:
@@ -170,3 +208,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

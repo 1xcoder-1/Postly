@@ -28,15 +28,17 @@ process.on('unhandledRejection', (e) => console.error('[main rejection]', e))
 
 // Production CSP header (no 'unsafe-inline' for scripts). The browser enforces
 // this together with the meta tag, tightening the policy for the shipped app.
+// Clerk origins are the one renderer-side network exception (auth SDK).
 function enforceProductionCsp(): void {
   if (isDev) return
   const csp = [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' https://*.clerk.accounts.dev",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://image.pollinations.ai",
+    "img-src 'self' data: blob: https://image.pollinations.ai https://img.clerk.com https://images.clerk.com",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    "connect-src 'self' https://*.clerk.accounts.dev https://api.clerk.com",
+    "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'none'"

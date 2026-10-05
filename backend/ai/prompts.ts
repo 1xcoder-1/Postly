@@ -38,7 +38,7 @@ export function buildPostPrompt(
         .join('\n')}\nLearn from these: different angle, better length, avoid the flagged tone.`
     : ''
 
-  return `You write viral social media posts about AI, developer tools and tech news.
+  return `You write viral, high-value social media posts about AI agents, open-source alternatives, developer tools, tech roadmaps, and engineering architectures.
 
 ${CREATOR_VOICE}
 
@@ -52,8 +52,8 @@ Create EXACTLY 3 variants, one per style, and return ONLY JSON:
     {
       "style": "educational | story | hot-take",
       "title": "hook under 80 chars",
-      "description": "150-280 chars, the post body",
-      "hashtags": ["#ai", "#devtools"]
+      "description": "150-280 chars, the post body with clear takeaways or step breakdown",
+      "hashtags": ["#ai", "#devtools", "#opensource"]
     }
   ]
 }
@@ -61,7 +61,9 @@ Create EXACTLY 3 variants, one per style, and return ONLY JSON:
 Style rules:${STYLES.map((s) => `\n- ${s}:${STYLE_HINT[s]}`).join('')}
 
 Rules:
-- Teach or commentate; add insight the reader can use. Never just restate the headline.
+- If the topic is a roadmap, architecture stack, or open-source alternative (e.g. n8n, Supabase, Ollama, LangGraph, Shadcn), break down the concrete steps, tech stack layers, or trade-offs clearly.
+- If the topic is a tech comparison (e.g. GraphQL vs gRPC, Redis vs Dragonfly, Monolith vs Microservices, REST vs WebSockets), explain the core technical trade-offs, performance differences, and clear decision criteria on when to use each.
+- Teach or commentate; add insight the reader can immediately use. Never just restate the headline.
 - 3-6 relevant hashtags, lowercase, no spaces.
 - No emojis unless they add meaning.
 - Do not invent statistics or quotes.

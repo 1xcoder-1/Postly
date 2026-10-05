@@ -16,7 +16,7 @@ import { ErrorBanner } from '@/renderer/components/ErrorBanner'
 import { StatusBadge, Hashtags } from '@/renderer/components/PostBits'
 
 const dateTimeInputClass =
-  'h-9 rounded-lg border border-input bg-muted/40 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'h-9 rounded-[8px] border border-input bg-zinc-800/40 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-primary/50'
 
 export default function Drafts() {
   const { posts, save, remove, reject, setStatus, setPlatforms, duplicate, load, error } = usePosts()
@@ -244,6 +244,7 @@ export default function Drafts() {
                       checked={selected.has(p.id)}
                       onChange={() => toggleSelect(p.id)}
                       aria-label="Select post"
+                      className="accent-primary"
                     />
                     <StatusBadge status={p.status} />
                     <span className="text-xs text-muted-foreground">{p.topic}</span>
@@ -282,7 +283,7 @@ export default function Drafts() {
                     </>
                   ) : (
                     <>
-                      <h3 className="font-semibold">{p.title}</h3>
+                      <h3 className="font-medium">{p.title}</h3>
                       <p className="whitespace-pre-wrap text-sm text-muted-foreground">{p.description}</p>
                       <Hashtags hashtags={p.hashtags} />
                       {p.scheduledAt && (
@@ -307,8 +308,8 @@ export default function Drafts() {
                       <button
                         key={pl}
                         onClick={() => togglePlatform(p, pl)}
-                        className={`rounded-full border px-3 py-1 font-mono text-xs capitalize transition-colors ${
-                          p.platforms.includes(pl) ? 'border-primary bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent'
+                        className={`rounded-full border px-3 py-1 text-xs capitalize transition-colors ${
+                          p.platforms.includes(pl) ? 'border-primary bg-primary/15 font-medium text-primary' : 'text-muted-foreground hover:bg-accent'
                         }`}
                       >
                         {pl}

@@ -61,13 +61,12 @@ function englishOnlyEnabled(): boolean {
 }
 
 // ── Tutorial/how-to filter ─────────────────────────────────────────────────
-// The user wants tech/AI INDUSTRY NEWS and breakthroughs — NOT beginner
-// "Python tutorial / day 1 / build a web app / crash course" content. Mirrors
-// backend/crawlers/lang.py is_tutorialish. Toggle off with FILTER_TUTORIALS=0.
+// Beginner learn-to-code spam is filtered while engineering roadmaps,
+// architectural blueprints, and deep dives are preserved.
 const TUTORIAL =
-  /\b(tutorials?|course[s]?|crash\s+course|bootcamp|roadmap|for\s+beginners?|beginners?|lec?t?ure|lesson|day\s*\d+|day\s+one|part\s*\d+|(?:ep|episode)\.?\s*\d+|in\s+one\s+video|in\s+\d+\s*(?:minutes?|hours?|days?)|build\s+(?:a|an|your|this)|web\s?app|portfolio\s+(?:project|website)|\d+\s+projects?|interview\s+questions|certification|how\s+to\s+(?:make|create|build|use|install|setup|set\s+up))\b/i
+  /\b(crash\s+course|bootcamp|for\s+beginners?|beginners?|lec?t?ure|lesson|day\s*\d+|day\s+one|part\s*\d+|(?:ep|episode)\.?\s*\d+|in\s+one\s+video|in\s+\d+\s*(?:minutes?|hours?|days?)|portfolio\s+(?:project|website)|\d+\s+projects?|interview\s+questions|certification)\b/i
 const LEARN_TECH =
-  /\blearn\s+(?:to\s+)?(?:python|javascript|java|c\+\+|golang|go|rust|react|html|css|sql|node(?:\.?js)?|next(?:\.?js)?|typescript|django|flask|spring|docker|kubernetes|aws|machine\s+learning|deep\s+learning|ai|dsa|data\s+structures|system\s+design)\b/i
+  /\blearn\s+(?:to\s+)?(?:python|javascript|java|c\+\+|golang|go|rust|react|html|css|sql|node(?:\.?js)?|next(?:\.?js)?|typescript|django|flask|spring|docker|kubernetes|aws|machine\s+learning|deep\s+learning|dsa|data\s+structures)\b/i
 
 function isTutorial(text: string): boolean {
   return TUTORIAL.test(text) || LEARN_TECH.test(text)
@@ -212,17 +211,39 @@ function asAgentReachReport(raw: unknown): AgentReachReport {
 }
 
 // ── Relevance + ranking ──────────────────────────────────────────────────────
-// Postly is about AI, developer tools and tech news. This keyword set both
-// boosts matching topics and lets the general-web crawler stay on-topic.
+// Postly boosts AI agents, developer tools, open-source alternatives,
+// architecture roadmaps, and tech industry breakthroughs.
 const TECH_KEYWORDS = [
-  'ai', 'llm', 'gpt', 'claude', 'gemini', 'model', 'agent', 'agentic', 'neural',
-  'machine learning', 'deep learning', 'transformer', 'diffusion', 'rag', 'embedding',
-  'inference', 'fine-tun', 'benchmark', 'gpu', 'cuda', 'python', 'javascript',
-  'typescript', 'react', 'node', 'rust', 'golang', 'kubernetes', 'docker', 'devops',
-  'api', 'sdk', 'cli', 'open source', 'oss', 'framework', 'compiler', 'database',
-  'postgres', 'sql', 'cloud', 'aws', 'azure', 'gcp', 'serverless', 'vulnerability',
-  'security', 'release', 'update', 'developer', 'startup', 'funding', 'acquisition'
+  'ai', 'llm', 'gpt', 'claude', 'gemini', 'grok', 'deepseek', 'deepseek-r1', 'deepseek-v3',
+  'qwen', 'model', 'agent', 'agentic', 'neural', 'machine learning', 'deep learning',
+  'transformer', 'diffusion', 'rag', 'embedding', 'inference', 'fine-tun', 'quantization',
+  'lora', 'qlora', 'tokenization', 'moe', 'grpo', 'dpo', 'vector db', 'qdrant', 'weaviate',
+  'chroma', 'milvus', 'speculative decoding', 'flash attention', 'flashattention-3', 'kv cache',
+  'pagedattention', 'sglang', 'vllm', 'tensorrt-llm', 'llama.cpp', 'unsloth', 'benchmark',
+  'gpu', 'cuda', 'mlx', 'ollama', 'lm studio', 'openclaw', 'python', 'javascript', 'typescript',
+  'react', 'react 19', 'react compiler', 'next.js', 'next.js 15', 'turbopack', 'vue', 'nuxt',
+  'svelte', 'svelte 5', 'astro', 'solid.js', 'qwik', 'remix', 'tanstack', 'node', 'rust',
+  'golang', 'bun', 'deno', 'hono', 'elysia', 'fastify', 'express', 'nest.js', 'trpc',
+  'graphql', 'grpc', 'connect-rpc', 'protobuf', 'rest', 'kubernetes', 'docker', 'devops',
+  'api', 'sdk', 'cli', 'open source', 'oss', 'alternative', 'self-hosted', 'framework',
+  'compiler', 'database', 'postgres', 'postgresql', 'pgvector', 'mongodb', 'sql', 'drizzle',
+  'prisma', 'kysely', 'supabase', 'neon', 'planetscale', 'turso', 'libsql', 'clickhouse',
+  'duckdb', 'redis', 'dragonfly', 'valkey', 'keydb', 'memcached', 'kafka', 'redpanda',
+  'rabbitmq', 'nats', 'temporal', 'inngest', 'trigger.dev', 'cloud', 'aws', 'azure', 'gcp',
+  'cloudflare', 'workers ai', 'serverless', 'vulnerability', 'security', 'strix',
+  'prompt injection', 'release', 'update', 'developer', 'startup', 'funding', 'acquisition',
+  'roadmap', 'stack', 'architecture', 'system design', 'n8n', 'dify', 'activepieces',
+  'langgraph', 'crewai', 'autogen', 'agno', 'openhands', 'smolagents', 'swarm', 'mcp',
+  'model context protocol', 'browserbase', 'stagehand', 'pydantic-ai', 'dspy', 'instructor',
+  'tools', 'skills', 'shadcn', 'tailwind', 'tailwind v4', 'radix', 'ark ui', 'base ui',
+  'magic ui', 'aceternity', '21st.dev', 'daisyui', 'ui component', 'design system', 'font',
+  'geist mono', 'jetbrains mono', 'fira code', 'google fonts', 'devtools', 'cursor',
+  'claude code', 'windsurf', 'continue.dev', 'frontend', 'backend', 'fullstack',
+  'core web vitals', 'view transitions', 'webgpu', 'three.js', 'opentelemetry',
+  'cal.com', 'documenso', 'posthog', 'plausible', 'immich', 'rustdesk', 'uptime-kuma'
 ]
+
+
 
 function relevance(title: string): number {
   const t = title.toLowerCase()
@@ -278,52 +299,47 @@ function cacheTtlMs(): number {
 }
 
 function resolveSubreddits(extra?: string): string {
-  // News/industry/AI-focused subs (the user wants updates & breakthroughs, not
-  // beginner help). Overridable/extendable via REDDIT_SUBREDDITS + the UI option.
-  const base = ['artificial', 'machinelearning', 'LocalLLaMA', 'OpenAI', 'ArtificialInteligence', 'technology', 'programming', 'Startups', 'webdev']
+  // News/industry/AI, open source alternatives, frontend, backend, system design, and UI design subreddits
+  const base = [
+    'artificial', 'machinelearning', 'LocalLLaMA', 'ChatGPT', 'ClaudeAI', 'singularity',
+    'selfhosted', 'opensource', 'webdev', 'Frontend', 'UI_Design', 'reactjs', 'nextjs',
+    'sveltejs', 'programming', 'technology', 'systemdesign', 'devops', 'Database', 'dataengineering'
+  ]
   const fromEnv = (process.env.REDDIT_SUBREDDITS || '').split(',')
   const fromOpt = (extra || '').split(',')
   const merged = [...base, ...fromEnv, ...fromOpt].map((s) => s.trim()).filter(Boolean)
   return [...new Set(merged)].join(',')
 }
 
+
 const envOn = (key: string): boolean => Boolean(process.env[key]?.trim())
 
 /** Query the enabled sources in parallel; each yields sanitized topics. */
 async function collectSources(subreddits: string): Promise<CrawlerTopic[]> {
   // Account-login flags: a connected personal account unlocks a deeper (slower)
-  // crawl, so those sources get a longer timeout. Blank cookies keep the fast,
-  // anonymous-budget timeouts so a default install behaves exactly as before.
+  // crawl, so those sources get a longer timeout.
   const xAccount = envOn('X_AUTH_TOKEN') && envOn('X_CT0')
   const redditAccount = envOn('REDDIT_COOKIE')
 
   const tasks: Promise<CrawlerTopic[]>[] = [
     runCrawler('hn_crawler.py'),
-    runCrawler('reddit_crawler.py', ['--subreddits', subreddits], redditAccount ? 90000 : 20000),
+    runCrawler('reddit_crawler.py', ['--subreddits', subreddits], redditAccount ? 90000 : 25000),
     runCrawler('dailydev_crawler.py'),
-    // Bluesky via the public AT Protocol API (no key, no account): always on,
-    // dormant-safe (prints [] instantly if references.json has no bsky seed).
+    // GitHub trending: AI agent skills, open-source alternatives & system design comparisons
+    runCrawler('github_crawler.py', [], 45000),
+    // Bluesky via the public AT Protocol API (no key, no account): always on
     runCrawler('bsky_crawler.py', [], 45000),
     runCrawlerRaw('agent_reach_crawler.py', ['--skip-doctor'], 60000).then((r) => asAgentReachReport(r).topics),
     // Reference-driven YouTube (yt-dlp): the reliable, live path. Always on.
     runCrawler('youtube_crawler.py', [], 150000),
-    // LinkedIn / any tech link via Jina Reader — exits [] fast when no refs set.
-    // Timeout is unchanged whether or not a LinkedIn account is connected.
-    runCrawler('linkedin_crawler.py', [], 60000)
+    // LinkedIn / any tech link via Jina Reader — live engineering blogs + Voyager feed.
+    runCrawler('linkedin_crawler.py', [], 60000),
+    // X (Twitter) live scrape via twscrape or seeds
+    runCrawler('x_crawler.py', [], xAccount ? 120000 : 45000),
+    // Instagram live profile crawl
+    runCrawler('instagram_crawler.py', [], 45000)
   ]
-  // Optional sources only spawn when explicitly opted in via env, so a default
-  // install never pays for extra Python processes or hits rate-limited sites.
-  // Instagram additionally auto-enables when Agent-Reach reports that channel as
-  // active (from the cached `agent-reach doctor` status) — capability-driven,
-  // not hard-coded to an env flag.
-  // X is always attempted, but x_crawler.py self-guards: it prints [] instantly
-  // when twscrape isn't installed or no account is configured, so an install
-  // without X credentials pays almost nothing. Accounts/queries come from
-  // references.json (x.accounts / x.queries), extended by X_ACCOUNTS/X_QUERIES.
-  // A connected X account unlocks the fuller login crawl → allow more time.
-  tasks.push(runCrawler('x_crawler.py', [], xAccount ? 120000 : 45000))
-  if (envOn('IG_PROFILES') || envOn('IG_EXPORT_FILES') || envOn('IG_USER') || channelActive('instagram'))
-    tasks.push(runCrawler('instagram_crawler.py', [], 60000))
+
   if (envOn('CRAWL4AI_URLS') || channelActive('linkedin')) tasks.push(runCrawler('web_crawler.py', [], 90000))
 
   const groups = await Promise.all(tasks)
@@ -355,7 +371,8 @@ export async function getDailyTopics(options: DailyTopicsOptions = {}): Promise<
     // part of the cache key (connecting/disconnecting an account busts the cache).
     xAccount: envOn('X_AUTH_TOKEN') && envOn('X_CT0'),
     linkedinAccount: envOn('LINKEDIN_LI_AT'),
-    redditAccount: envOn('REDDIT_COOKIE')
+    redditAccount: envOn('REDDIT_COOKIE'),
+    githubAccount: envOn('GITHUB_TOKEN')
   })
 
   const cached = topicsCache.get(key)

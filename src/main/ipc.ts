@@ -15,7 +15,7 @@ import {
 } from '../../backend/db/postStore'
 import { getSettings, setSettings, initSettings, hasDatabase } from '../../backend/services/settingsService'
 import { getAccountStatuses, invalidateAccountStatusCache } from '../../backend/services/accountStatus'
-import { openAccountLogin } from './accountLogin'
+import { startOAuthFlow } from './oauthServer'
 import { checkDatabaseHealth } from '../../backend/db/client'
 import { allSettings, setSetting, getSetting } from '../../backend/db/settingsRepo'
 import { usageSnapshot, recentLog, resetUsage } from '../../backend/ai/usage'
@@ -25,7 +25,7 @@ import type { GeneratePostInput, PostRecord, DailyTopicsOptions, PostStatus, Acc
 
 // Sources accepted by the accounts:login channel (validated before spawning a
 // login window / touching the encrypted settings track).
-const ACCOUNT_SOURCES: AccountSource[] = ['x', 'linkedin', 'reddit']
+const ACCOUNT_SOURCES: AccountSource[] = ['x', 'linkedin', 'reddit', 'github']
 
 // Wraps every handler so a thrown error becomes a structured { ok:false }
 // the renderer can display, instead of an unhandled rejection.
@@ -40,19 +40,6 @@ function handle<T>(channel: string, fn: (payload: T) => Promise<unknown> | unkno
   })
 }
 
-// Opens an external URL in the system browser. CSP blocks window.open and
-// form submissions from the renderer, so links must pass through main. Only
-// http(s) to official social platforms is allowed — anything else throws.
-const ALLOWED_HOSTS = [
-  'x.com',
-  'twitter.com',
-  'linkedin.com',
-  'instagram.com',
-  'threads.net',
-  'threads.com',
-  'reddit.com'
-]
-
 function openExternal(url: string): void {
   let parsed: URL
   try {
@@ -63,9 +50,6 @@ function openExternal(url: string): void {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new Error('Only http(s) links can be opened')
   }
-  const host = parsed.hostname.toLowerCase()
-  const allowed = ALLOWED_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))
-  if (!allowed) throw new Error(`Host not allowed: ${host}`)
   shell.openExternal(parsed.toString())
 }
 
@@ -102,7 +86,7 @@ export function registerIpc(): void {
   handle('accounts:login', (payload: { source: AccountSource }) => {
     const source = payload?.source
     if (!source || !ACCOUNT_SOURCES.includes(source)) throw new Error('Invalid account source')
-    return openAccountLogin(source)
+    return startOAuthFlow(source)
   })
   handle('accounts:status', () => getAccountStatuses())
 

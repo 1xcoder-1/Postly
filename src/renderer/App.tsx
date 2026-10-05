@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { HashRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import {
   Home,
@@ -12,8 +12,7 @@ import {
   Sun,
   ChevronRight,
   ChevronLeft,
-  Flame,
-  Keyboard
+  Flame
 } from 'lucide-react'
 
 // Clean Core Pages
@@ -23,10 +22,10 @@ import GeneratePost from './pages/GeneratePost'
 import Drafts from './pages/Drafts'
 import CalendarPage from './pages/Calendar'
 import SettingsPage from './pages/Settings'
+import AuthPage from './pages/Auth'
 
+import { ClerkAuthProvider } from './components/ClerkAuthProvider'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { NoticeBoardModal } from './components/NoticeBoardModal'
-import { UserProfileModal } from './components/UserProfileModal'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { usePosts } from './store'
 import { useTheme } from './theme'
@@ -48,72 +47,51 @@ const NAV_ITEMS: NavItemDef[] = [
   { to: '/settings', label: 'Settings', icon: SettingsIcon }
 ]
 
-function Sidebar({
-  collapsed,
-  onToggleCollapse,
-  onOpenProfile
-}: {
-  collapsed: boolean
-  onToggleCollapse: () => void
-  onOpenProfile: () => void
-}) {
+function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; onToggleCollapse: () => void }) {
   return (
     <aside
       className={cn(
-        'flex shrink-0 flex-col border-r border-[#1f1f24] bg-[#0e0e11] transition-all duration-200 select-none z-20',
-        collapsed ? 'w-20' : 'w-64'
+        'flex shrink-0 flex-col border-r border-dashed border-gray-500/40 transition-all duration-200 select-none z-20',
+        collapsed ? 'w-20' : 'w-[248px]'
       )}
     >
-      {/* Brand Logo */}
-      <div className="flex h-16 items-center justify-between px-5 border-b border-[#1b1b20]">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#f06e1e] to-[#fb923c] shadow-md shadow-orange-950/40">
-            <Flame className="h-5 w-5 text-white" />
-          </div>
-          {!collapsed && (
-            <span className="text-lg font-extrabold tracking-tight text-white flex items-center gap-1">
-              Post<span className="text-[#f06e1e]">ly</span>
-            </span>
-          )}
-        </div>
+      {/* Brand — MasterJi-style wordmark in Palanquin */}
+      <div className="mt-6 flex h-9 items-center gap-2 px-8">
+        <Flame className="h-6 w-6 shrink-0 text-primary" />
+        {!collapsed && (
+          <span className="font-num text-xl font-semibold tracking-tight text-foreground">
+            Post<span className="text-primary">ly</span>
+          </span>
+        )}
       </div>
 
-      {/* Clean Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3.5">
+      {/* Nav pills — flat orange-400/85 active, space-y-2, px-5 */}
+      <nav className="mt-8 flex-1 space-y-2 overflow-y-auto px-5 pb-4">
         {NAV_ITEMS.map(({ to, label, icon: Icon, beta }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
             className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3.5 px-4 py-2.5 rounded-full text-sm font-medium transition-all group',
-                isActive
-                  ? 'bg-gradient-to-r from-[#f06e1e] to-[#e45b13] text-white shadow-lg shadow-orange-900/30'
-                  : 'text-zinc-400 hover:bg-[#18181c] hover:text-zinc-100'
-              )
+              cn('masterji-sidebar-item', isActive ? 'masterji-sidebar-item-active' : 'masterji-sidebar-item-inactive')
             }
             title={collapsed ? label : undefined}
           >
             {({ isActive }) => (
               <>
-                <Icon
-                  className={cn(
-                    'h-4 w-4 shrink-0 transition-colors',
-                    isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'
-                  )}
-                />
-                {!collapsed && (
-                  <span className="flex-1 truncate">{label}</span>
-                )}
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="flex-1 truncate">{label}</span>}
                 {!collapsed && beta && (
-                  <span
-                    className={cn(
-                      'text-[10px] font-bold uppercase tracking-wider',
-                      isActive ? 'text-white/90' : 'text-amber-400'
-                    )}
-                  >
-                    • BETA
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <span className="size-1.5 rounded-full bg-warning" />
+                    <span
+                      className={cn(
+                        'text-[10px] font-semibold uppercase tracking-wider',
+                        isActive ? 'text-white/90' : 'text-warning'
+                      )}
+                    >
+                      Beta
+                    </span>
                   </span>
                 )}
               </>
@@ -122,27 +100,19 @@ function Sidebar({
         ))}
       </nav>
 
-      {/* User profile bottom pill */}
-      <div className="border-t border-[#1b1b20] p-3">
-        <div
-          onClick={onOpenProfile}
-          className="flex cursor-pointer items-center justify-between rounded-2xl border border-[#232328] bg-[#141417] p-2 transition-colors hover:border-primary/40 hover:bg-[#18181c]"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#f06e1e] to-[#fb923c] font-bold text-xs text-white">
-              1x
+      {/* User pill pinned to the bottom (MasterJi profile slot) */}
+      <div className="relative p-4">
+        <div className="flex cursor-default items-center justify-between rounded-2xl border border-dashed border-gray-500/40 px-2.5 py-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary font-num text-xs font-semibold text-primary-foreground">
+              P
             </div>
-            {!collapsed && (
-              <span className="truncate text-xs font-semibold text-zinc-200">1xcoder</span>
-            )}
+            {!collapsed && <span className="truncate text-sm text-foreground">Postly</span>}
           </div>
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleCollapse()
-            }}
-            className="rounded-lg p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
+            onClick={onToggleCollapse}
+            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -153,39 +123,30 @@ function Sidebar({
   )
 }
 
-function Header({
-  onOpenNotice,
-  dark,
-  onToggleTheme
-}: {
-  onOpenNotice: () => void
-  dark: boolean
-  onToggleTheme: () => void
-}) {
+function Header({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
+  const navigate = useNavigate()
   return (
-    <header className="flex h-16 shrink-0 items-center justify-end border-b border-[#1f1f24] bg-[#0e0e11]/90 px-8 backdrop-blur z-10">
-      <div className="flex items-center gap-3">
-        {/* Notice Board Button with gold badge */}
+    <header className="flex h-14 shrink-0 items-center justify-end px-8 z-10">
+      <div className="flex items-center gap-2.5">
+        {/* Sign In / Connect — small flat pill like MasterJi header actions */}
         <button
-          onClick={onOpenNotice}
-          className="flex items-center gap-2 rounded-full border border-[#27272a] bg-[#161619] px-3.5 py-1.5 text-xs font-medium text-zinc-200 transition-all hover:border-primary/40 hover:bg-[#1c1c20]"
+          onClick={() => navigate('/auth')}
+          className="flex h-8 items-center gap-2 rounded-full bg-primary px-3.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          <span>Notice Board</span>
-          <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 font-mono text-[10px] font-bold text-black">
-            1
-          </span>
+          <Sparkles className="h-3.5 w-3.5" />
+          <span>Sign In / Connect</span>
         </button>
 
-        {/* Theme Crescent Toggle */}
+        {/* Theme toggle */}
         <button
           onClick={onToggleTheme}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#27272a] bg-[#161619] text-zinc-300 transition-colors hover:border-primary/40 hover:text-white"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-700/40 text-zinc-500 transition-colors hover:text-foreground dark:text-zinc-300"
           title={dark ? 'Switch to Light mode' : 'Switch to Dark mode'}
         >
           {dark ? (
-            <Moon className="h-4 w-4 fill-zinc-300 text-zinc-300" />
+            <Moon className="h-4 w-4" />
           ) : (
-            <Sun className="h-4 w-4 text-amber-500" />
+            <Sun className="h-4 w-4" />
           )}
         </button>
       </div>
@@ -200,8 +161,6 @@ function Shell() {
   const load = usePosts((s) => s.load)
 
   const [collapsed, setCollapsed] = useState(false)
-  const [showNoticeBoard, setShowNoticeBoard] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
 
   useEffect(() => {
@@ -231,24 +190,18 @@ function Shell() {
   }, [])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0a0a0c] text-foreground">
-      <Sidebar
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed(!collapsed)}
-        onOpenProfile={() => setShowProfile(true)}
-      />
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed(!collapsed)} />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header
-          onOpenNotice={() => setShowNoticeBoard(true)}
-          dark={theme === 'dark'}
-          onToggleTheme={toggle}
-        />
+        <Header dark={theme === 'dark'} onToggleTheme={toggle} />
 
-        <main className="flex-1 overflow-y-auto px-6 py-6 lg:px-10 lg:py-8">
+        <main className="flex-1 overflow-y-auto px-6 pb-8 pt-2 lg:px-10">
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/auth" element={<AuthPage />} />
+              <Route path="/login" element={<AuthPage />} />
               <Route path="/topics" element={<TopicRadar />} />
               <Route path="/generate" element={<GeneratePost />} />
               <Route path="/drafts" element={<Drafts />} />
@@ -260,8 +213,6 @@ function Shell() {
         </main>
       </div>
 
-      {showNoticeBoard && <NoticeBoardModal onClose={() => setShowNoticeBoard(false)} />}
-      {showProfile && <UserProfileModal onClose={() => setShowProfile(false)} />}
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
     </div>
   )
@@ -270,9 +221,11 @@ function Shell() {
 export default function App() {
   const theme = useTheme((s) => s.theme)
   return (
-    <HashRouter>
-      <Shell />
-      <Toaster position="bottom-right" theme={theme} richColors />
-    </HashRouter>
+    <ClerkAuthProvider>
+      <HashRouter>
+        <Shell />
+        <Toaster position="bottom-right" theme={theme} richColors />
+      </HashRouter>
+    </ClerkAuthProvider>
   )
 }

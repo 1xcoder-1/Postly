@@ -179,7 +179,7 @@ def read_via_jina(url):
     target = "https://r.jina.ai/" + url
     try:
         req = urllib.request.Request(target, headers=UA_HEADERS)
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=6) as resp:
             return resp.read().decode("utf-8", errors="replace")
     except Exception as exc:
         print(f"jina {url} error: {exc}", file=sys.stderr)
@@ -211,13 +211,20 @@ def topics_from_markdown(markdown, url):
 
 
 def fetch():
-    from lang import is_english  # noqa: F401  (import check; used per-url)
+    from concurrent.futures import ThreadPoolExecutor
+    links = load_links()
+    if not links:
+        return []
     out = []
-    for url in load_links():
-        markdown = read_via_jina(url)
-        if markdown:
-            out += topics_from_markdown(markdown, url)
+    def _worker(u):
+        md = read_via_jina(u)
+        return topics_from_markdown(md, u) if md else []
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        for res in executor.map(_worker, links):
+            out += res
     return out
+
 
 
 # --------------------------------------------------------------------------

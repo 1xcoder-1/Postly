@@ -17,7 +17,8 @@ module.exports = {
         muted: { DEFAULT: 'hsl(var(--muted))', foreground: 'hsl(var(--muted-foreground))' },
         accent: { DEFAULT: 'hsl(var(--accent))', foreground: 'hsl(var(--accent-foreground))' },
         popover: { DEFAULT: 'hsl(var(--popover))', foreground: 'hsl(var(--popover-foreground))' },
-        card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' }
+        card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
+        warning: 'hsl(var(--warning))'
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -25,7 +26,10 @@ module.exports = {
         sm: 'calc(var(--radius) - 6px)'
       },
       fontFamily: {
-        sans: ['var(--font-sans)'],
+        sans: ['Inter', 'var(--font-sans)'],
+        title: ['Montserrat', 'sans-serif'],
+        num: ['Palanquin', 'sans-serif'],
+        display: ['Plus Jakarta Sans', 'sans-serif'],
         mono: ['var(--font-mono)']
       },
       boxShadow: {

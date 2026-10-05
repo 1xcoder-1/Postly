@@ -29,7 +29,8 @@ export const KEY_NAMES = [
   'X_AUTH_TOKEN',
   'X_CT0',
   'LINKEDIN_LI_AT',
-  'REDDIT_COOKIE'
+  'REDDIT_COOKIE',
+  'GITHUB_TOKEN'
 ] as const
 
 export type SettingKey = (typeof KEY_NAMES)[number]

@@ -9,16 +9,16 @@ interface StatCardProps {
   className?: string
 }
 
-/** Dashboard metric tile: eyebrow label, big mono value, optional sub-hint. */
+/** MasterJi stat tile: Montserrat 20px title, Palanquin 36px number, 12px hint. */
 export function StatCard({ label, value, hint, icon, className }: StatCardProps) {
   return (
-    <div className={cn('rounded-xl border bg-card p-5 shadow-card', className)}>
+    <div className={cn('rounded-[14px] border border-border bg-card p-4 shadow-sm', className)}>
       <div className="flex items-start justify-between gap-2">
-        <span className="eyebrow">{label}</span>
-        {icon && <span className="text-muted-foreground">{icon}</span>}
+        <span className="font-title text-xl font-medium leading-7 tracking-tight">{label}</span>
+        {icon && <span className="mt-1 text-muted-foreground [&_svg]:h-5 [&_svg]:w-5">{icon}</span>}
       </div>
-      <div className="mt-3 font-mono text-3xl font-bold leading-none">{value}</div>
-      {hint && <div className="mt-2 text-xs text-muted-foreground">{hint}</div>}
+      <div className="mt-2 px-1 font-num text-4xl font-medium leading-10">{value}</div>
+      {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
     </div>
   )
 }

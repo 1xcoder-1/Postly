@@ -1,7 +1,7 @@
 {
-  "_comment": "Reference sources that seed the crawlers. Edit freely or override with env vars (YT_REFS/YT_CHANNELS, X_ACCOUNTS, IG_PROFILES, LINKEDIN_REFS). Content is ALWAYS scraped LIVE — this file only says WHERE to look, never hard-codes results. The intent here is tech/AI INDUSTRY NEWS and breakthroughs from famous creators & companies — NOT beginner tutorials (a tutorial filter in lang.py + crawlerService drops those titles).",
+  "_comment": "Reference sources that seed the crawlers. Content is ALWAYS scraped LIVE across AI/LLMs, frameworks, system design, open-source tools, roadmaps, and UI toolkits.",
   "youtube": {
-    "_comment": "channels = @handles (precise; recent uploads pulled live) or plain channel names (matched via yt-dlp search). Famous tech/AI news + industry commentary creators. videos = optional reference video IDs/URLs whose whole channel is scraped; left empty so no tutorial channels leak in.",
+    "_comment": "channels = @handles or channel names for tech news, AI agents, open source tools, system comparisons, and UI design breakdowns.",
     "videos": [],
     "channels": [
       "@Fireship",
@@ -30,40 +30,62 @@
       "@TechLinked",
       "Wes Roth",
       "Matt Wolfe",
-      "AI Explained"
+      "AI Explained",
+      "@ByteByteGo",
+      "@IndieHacker",
+      "@TraversyMedia",
+      "@WebDevSimplified",
+      "@KevinPowell",
+      "@DesignCourse"
     ]
   },
   "instagram": {
-    "_comment": "profiles = public tech accounts to read (needs instaloader, rate-limited); posts = reference post/reel shortcodes. Anonymous IG scraping is heavily rate-limited, so expect best-effort.",
+    "_comment": "profiles = public tech and UI design accounts to read.",
     "profiles": [
       "openai", "claudeai", "googlefordevelopers", "andrejkarpathy",
-      "google", "microsoft", "deeplearning.ai", "nvidia", "theprimeagen"
+      "google", "microsoft", "deeplearning.ai", "nvidia", "theprimeagen",
+      "uiuxbunker", "welovewebdesign", "interactiondesignorg", "designcourse"
     ],
     "posts": []
   },
   "x": {
-    "_comment": "Famous AI/tech companies & builders. Read LIVE via twscrape (pip install twscrape, then run 'twscrape add_accounts' or 'twscrape add_cookie' to configure YOUR X account) - their latest posts become topics. Dormant (prints []) until an account is set, so Postly keeps working with zero X credentials. Extend/override with X_ACCOUNTS env.",
+    "_comment": "Famous AI/tech companies, open source builders, UI designers, and devtool creators.",
     "accounts": [
-      "OpenAI", "AnthropicAI", "GoogleDeepMind", "GoogleAI", "karpathy", "sama",
+      "OpenAI", "AnthropicAI", "GoogleDeepMind", "GoogleAI", "deepseek_ai", "karpathy", "sama",
       "demishassabis", "Vercel", "cloudflare", "supabase", "cursor_ai", "Microsoft",
-      "huggingface", "mistral_ai", "perplexity_ai", "deepseek_ai", "nvidia",
-      "ycombinator", "a16z", "reactjs", "ThePrimeagen", "mreflow"
+      "huggingface", "mistral_ai", "perplexity_ai", "nvidia", "ycombinator", "a16z",
+      "reactjs", "ThePrimeagen", "mreflow", "shadcn", "n8n_io", "LangChainAI",
+      "CrewAIInc", "OpenHandsAI", "ollama", "posthog", "calcom", "t3dotgg",
+      "raunofreiberg", "evilrabbit_", "pacocoursey", "steventey", "adamwathan",
+      "drizzleorm", "prisma", "honojs", "bunproject"
     ],
     "queries": [
-      "AI breakthrough", "LLM release", "developer tools", "frontend news",
-      "backend architecture", "AI startup funding"
+      "DeepSeek R1 V3 architecture", "AI LLM Core Concepts", "Quantization LoRA QLoRA",
+      "RAG Retrieval Augmented Generation", "AI Agent Skills MCP", "LangGraph CrewAI AutoGen Agno",
+      "Claude 3.7 Opus GPT-5 Gemini 2.5", "Cursor AI Windsurf Claude Code",
+      "Next.js 15 React 19 RSC", "Svelte 5 runes Nuxt 4 Astro", "Tailwind v4 Shadcn UI Magic UI",
+      "PostgreSQL vs MongoDB", "GraphQL vs REST vs gRPC", "gRPC vs tRPC vs Connect",
+      "Kafka vs RabbitMQ vs NATS", "Redis vs Memcached vs Dragonfly vs Valkey",
+      "System Design architecture scaling", "Core Web Vitals web performance",
+      "Open source alternatives to SaaS", "Supabase vs Firebase Appwrite",
+      "Drizzle vs Prisma Kysely", "Hono vs Elysia Fastify", "Bun vs Node vs Deno",
+      "Vector DB Qdrant Weaviate Chroma", "Free developer fonts Geist Mono",
+      "Speculative Decoding Flash Attention", "Agentic RAG GraphRAG", "Vercel AI SDK Pydantic AI"
     ]
   },
   "bsky": {
-    "_comment": "NEW topic source. Read LIVE via Bluesky's public AT Protocol API (public.api.bsky.app) - no key, no account needed. authors = handles (best-effort; unknown ones are silently skipped). queries = live search terms and are the reliable driver. Extend/override with BLUESKY_AUTHORS / BLUESKY_QUERIES env.",
-    "authors": ["openai.com", "vercel.com", "github.com", "stripe.com"],
+    "_comment": "Bluesky AT Protocol public search seeds.",
+    "authors": ["openai.com", "vercel.com", "github.com", "stripe.com", "supabase.com", "anthropic.com"],
     "queries": [
-      "AI breakthrough", "LLM release", "developer tools", "web development",
-      "open source", "machine learning", "AI startup funding"
+      "DeepSeek R1", "AI breakthrough", "LLM release", "developer tools", "web development",
+      "open source alternative", "machine learning", "AI agent architecture",
+      "Next.js React 19", "UI design inspiration", "GraphQL vs gRPC",
+      "PostgreSQL vs MongoDB", "system design comparison", "free developer tools",
+      "MCP server tools", "Shadcn UI Tailwind v4", "LangGraph CrewAI"
     ]
   },
   "linkedin": {
-    "_comment": "posts = any public URL mirrored into topics through the agent-reach web channel (Jina Reader): each page's headings become fresh topics. Seeded with big company / lab newsrooms so you get real AI/tech updates. Add your own links or extend via LINKEDIN_REFS.",
+    "_comment": "Engineering blogs, UI design repositories & research newsrooms scraped live via Jina Reader.",
     "posts": [
       "https://openai.com/news/",
       "https://www.anthropic.com/news",
@@ -73,21 +95,34 @@
       "https://vercel.com/blog",
       "https://blog.cloudflare.com/",
       "https://supabase.com/blog",
-      "https://huggingface.co/blog"
+      "https://huggingface.co/blog",
+      "https://posthog.com/blog",
+      "https://blog.langchain.dev/",
+      "https://blog.n8n.io/",
+      "https://mobbin.com",
+      "https://godly.website"
     ]
   },
   "verticals": [
-    "artificial intelligence",
-    "machine learning",
-    "large language models",
-    "cloud computing",
-    "cybersecurity",
-    "startups",
-    "web development",
-    "data science",
-    "robotics",
-    "devops",
-    "open source software",
-    "software engineering"
+    "artificial intelligence and llm fundamentals",
+    "deepseek r1 reasoning models and test time compute",
+    "tokenization quantization and fine-tuning",
+    "retrieval augmented generation and rag",
+    "ai agents mcp servers and multi-agent workflows",
+    "langgraph crewai autogen agno and agent skills",
+    "claude gpt gemini and cursor ai updates",
+    "open source software alternatives to paid saas",
+    "react 19 next.js 15 svelte 5 and modern frontend",
+    "tailwind css v4 shadcn ui and design systems",
+    "system design and tech comparisons",
+    "graphql vs grpc and api design",
+    "postgresql vs mongodb and database scaling",
+    "redis dragonfly valkey and message queues",
+    "web performance core web vitals and edge computing",
+    "developer tools local llms and vector databases",
+    "free developer fonts ui inspiration and resources",
+    "flash attention speculative decoding and agentic rag"
   ]
 }
+
+

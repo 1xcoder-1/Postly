@@ -1,29 +1,29 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { toast } from 'sonner'
 import {
   Database,
   KeyRound,
   Save,
   ShieldCheck,
-  ShieldAlert,
   Trash2,
   Plug,
   RotateCcw,
   Cpu,
-  Download,
-  Upload,
-  Info,
   SlidersHorizontal,
   Ban,
   CheckCircle2,
   AlertTriangle,
-  LogIn,
-  Loader2
+  Loader2,
+  ExternalLink,
+  RefreshCw,
+  Globe
 } from 'lucide-react'
 import { PLATFORMS, POST_STYLES, TONES, type Platform, type PostStyle, type Tone, type ModelUsage, type AccountSource, type AccountStatus } from '@shared/types'
 import { api, type SettingsStatus } from '@/renderer/lib/api'
-import { useTheme } from '@/renderer/theme'
 import { Button } from '@/renderer/components/ui/button'
+import { Input, Select, Label } from '@/renderer/components/ui/input'
+import { PageHeader } from '@/renderer/components/ui/PageHeader'
+import { GithubIcon, XIcon, LinkedinIcon, RedditIcon } from '@/renderer/components/BrandIcons'
 
 const KEY_GROUPS = [
   {
@@ -53,26 +53,51 @@ const KEY_GROUPS = [
   }
 ]
 
-// Account-login crawling: paste fields (manual fallback for the in-app login).
-// A full cookie jar is tolerated — main extracts the named cookie before saving.
-const ACCOUNT_KEY_FIELDS = [
-  { key: 'X_AUTH_TOKEN', label: 'X auth_token Cookie', placeholder: 'auth_token value or cookie jar' },
-  { key: 'X_CT0', label: 'X ct0 Cookie', placeholder: 'ct0 value' },
-  { key: 'LINKEDIN_LI_AT', label: 'LinkedIn li_at Cookie', placeholder: 'li_at value' },
-  { key: 'REDDIT_COOKIE', label: 'Reddit token_v2 Cookie', placeholder: 'token_v2 JWT' }
+// Per-source account integration rows (X / LinkedIn / Reddit / GitHub).
+const ACCOUNT_SOURCE_ROWS: {
+  source: AccountSource
+  label: string
+  icon: ComponentType<{ className?: string }>
+  hint: string
+}[] = [
+  {
+    source: 'github',
+    label: 'GitHub',
+    icon: GithubIcon,
+    hint: 'Opens GitHub App Access & Token Authorization for Postly'
+  },
+  {
+    source: 'x',
+    label: 'X (Twitter)',
+    icon: XIcon,
+    hint: 'Opens X Connected Apps & Account Permissions'
+  },
+  {
+    source: 'linkedin',
+    label: 'LinkedIn',
+    icon: LinkedinIcon,
+    hint: 'Opens LinkedIn Account Access & Permitted Integrations'
+  },
+  {
+    source: 'reddit',
+    label: 'Reddit',
+    icon: RedditIcon,
+    hint: 'Opens Reddit Authorized Apps & Account Access'
+  }
 ]
 
-// Per-source in-app login rows (X / LinkedIn / Reddit).
-const ACCOUNT_SOURCE_ROWS: { source: AccountSource; label: string }[] = [
-  { source: 'x', label: 'X (Twitter)' },
-  { source: 'linkedin', label: 'LinkedIn' },
-  { source: 'reddit', label: 'Reddit' }
+const TABS: { id: 'keys' | 'models' | 'prefs' | 'about'; label: string }[] = [
+  { id: 'keys', label: 'Web Accounts & API Keys' },
+  { id: 'models', label: 'AI Router & Quotas' },
+  { id: 'prefs', label: 'Posting Preferences' },
+  { id: 'about', label: 'About Postly' }
 ]
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'keys' | 'models' | 'prefs' | 'about'>('keys')
   const [status, setStatus] = useState<SettingsStatus>({})
   const [draft, setDraft] = useState<Record<string, string>>({})
+  const [connectingSource, setConnectingSource] = useState<string | null>(null)
   const [tests, setTests] = useState<Record<string, { state: 'idle' | 'testing' | 'ok' | 'bad'; message: string }>>({})
   const [hasDb, setHasDb] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -80,7 +105,6 @@ export default function SettingsPage() {
   const [rejectionCount, setRejectionCount] = useState(0)
   const [version, setVersion] = useState('0.1.0')
   const [accountStatuses, setAccountStatuses] = useState<AccountStatus[]>([])
-  const [loggingIn, setLoggingIn] = useState<AccountSource | null>(null)
 
   const [prefs, setPrefs] = useState({
     defaultPlatforms: 'x,linkedin',
@@ -88,10 +112,6 @@ export default function SettingsPage() {
     defaultTone: 'casual',
     carouselDefault: 'off'
   })
-
-  const theme = useTheme((s) => s.theme)
-  const setTheme = useTheme((s) => s.setTheme)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const refresh = async () => {
     try {
@@ -166,20 +186,63 @@ export default function SettingsPage() {
     }
   }
 
-  // Opens the in-app login window for a platform. On success we toast + refresh
-  // the live status; on cancel (window closed) we silently do nothing.
-  const loginAccount = async (source: AccountSource) => {
-    setLoggingIn(source)
+  const connectWithBrowser = async (row: typeof ACCOUNT_SOURCE_ROWS[0]) => {
+    setConnectingSource(row.source)
     try {
-      const res = await api.accountsLogin(source)
+      toast.info(`Opening ${row.label} in your browser… Please click Authorize/Continue on the web page.`, { duration: 6000 })
+      const res = await api.accountsLogin(row.source)
       if (res.ok) {
-        toast.success('Connected')
         await Promise.all([refresh(), refreshAccountStatus()])
+        toast.success(`Connected to ${row.label} successfully!`)
+      } else if (res.error && res.error !== 'cancelled') {
+        toast.error(res.error)
       }
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
-      setLoggingIn(null)
+      setConnectingSource(null)
+    }
+  }
+
+  const disconnectAccount = async (row: typeof ACCOUNT_SOURCE_ROWS[0]) => {
+    if (!window.confirm(`Disconnect ${row.label}? This will remove saved session credentials from this device.`)) return
+    try {
+      const patch: Record<string, string> = {}
+      if (row.source === 'x') {
+        patch['X_AUTH_TOKEN'] = ''
+        patch['X_CT0'] = ''
+      } else if (row.source === 'linkedin') {
+        patch['LINKEDIN_LI_AT'] = ''
+      } else if (row.source === 'reddit') {
+        patch['REDDIT_COOKIE'] = ''
+      } else if (row.source === 'github') {
+        patch['GITHUB_TOKEN'] = ''
+      }
+      await api.setSettings(patch)
+      await Promise.all([refresh(), refreshAccountStatus()])
+      toast.success(`${row.label} disconnected`)
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  const verifyAccount = async (row: typeof ACCOUNT_SOURCE_ROWS[0]) => {
+    setConnectingSource(row.source)
+    try {
+      toast.info(`Verifying live ${row.label} session…`)
+      const updatedStatuses = await api.accountsStatus()
+      setAccountStatuses(updatedStatuses)
+      await refresh()
+      const st = updatedStatuses.find((a) => a.source === row.source)
+      if (st?.connected) {
+        toast.success(`Verified: ${st.message || 'Session is active'}`)
+      } else {
+        toast.error(st?.message || 'Session expired or invalid')
+      }
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setConnectingSource(null)
     }
   }
 
@@ -219,8 +282,6 @@ export default function SettingsPage() {
 
   const selectedPlatforms = new Set(prefs.defaultPlatforms.split(',').filter(Boolean) as Platform[])
 
-  // Shared masked secret-row renderer (input + Test + Trash) reused by both the
-  // API-key groups and the Account Logins card so behaviour stays identical.
   const renderKeyField = (key: string, label: string, placeholder: string) => {
     const info = status[key]
     const isSet = info?.configured
@@ -228,34 +289,33 @@ export default function SettingsPage() {
 
     return (
       <div key={key} className="space-y-1.5">
-        <label className="text-xs font-semibold text-zinc-300 block">{label}</label>
+        <Label>{label}</Label>
         <div className="flex items-center gap-1.5">
-          <input
+          <Input
             type="password"
             autoComplete="off"
             spellCheck={false}
             placeholder={isSet ? `••••${info.last4} (${info.length} chars saved)` : placeholder}
             value={draft[key] ?? ''}
             onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-            className="w-full rounded-xl border border-[#27272a] bg-[#18181c] px-3.5 py-2 text-sm text-white placeholder-zinc-600 focus:border-primary focus:outline-none"
           />
           <Button
             size="icon"
-            variant="ghost"
+            variant="outline"
             onClick={() => testKey(key)}
             disabled={testState?.state === 'testing'}
             title="Test key"
-            className="h-9 w-9 rounded-xl border border-[#27272a] text-zinc-300 hover:border-primary hover:text-primary"
+            className="hover:border-primary hover:text-primary"
           >
             <Plug className="h-4 w-4" />
           </Button>
           {isSet && !draft[key] && (
             <Button
               size="icon"
-              variant="ghost"
+              variant="outline"
               onClick={() => clearKey(key)}
               title="Remove key"
-              className="h-9 w-9 rounded-xl border border-[#27272a] text-zinc-400 hover:border-rose-500 hover:text-rose-400"
+              className="hover:border-rose-500 hover:text-rose-500"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -265,10 +325,10 @@ export default function SettingsPage() {
           <p
             className={`font-mono text-[11px] ${
               testState.state === 'ok'
-                ? 'text-emerald-400'
+                ? 'text-emerald-600 dark:text-emerald-400'
                 : testState.state === 'bad'
-                ? 'text-rose-400'
-                : 'text-zinc-500'
+                ? 'text-rose-600 dark:text-rose-400'
+                : 'text-muted-foreground'
             }`}
           >
             {testState.state === 'testing' ? 'Testing connection…' : testState.message}
@@ -279,146 +339,193 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 animate-in fade-in duration-200">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            API keys, AI fallback router quotas, and posting defaults.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/40 text-emerald-400 px-3 py-1 text-xs font-medium">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            OS-Encrypted
-          </span>
-          <span className="flex items-center gap-1.5 rounded-full border border-zinc-700/50 bg-zinc-800/60 text-zinc-300 px-3 py-1 text-xs font-medium">
-            <Database className="h-3.5 w-3.5 text-zinc-400" />
-            {hasDb ? 'Neon DB' : 'Local JSON'}
-          </span>
-        </div>
-      </div>
+    <div className="mx-auto max-w-5xl animate-in fade-in duration-200">
+      <PageHeader
+        title="Settings"
+        description="Account connections, API keys, and AI fallback quotas."
+        actions={
+          <>
+            <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              OS-Encrypted
+            </span>
+            <span className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Database className="h-3.5 w-3.5" />
+              {hasDb ? 'Neon DB' : 'Local JSON'}
+            </span>
+          </>
+        }
+      />
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-[#232328] pb-1">
-        {[
-          { id: 'keys', label: 'API Keys' },
-          { id: 'models', label: 'AI Router & Quotas' },
-          { id: 'prefs', label: 'Posting Preferences' },
-          { id: 'about', label: 'About Postly' }
-        ].map((tab) => {
+      <div className="flex items-center gap-6 border-b border-border">
+        {TABS.map((tab) => {
           const isActive = activeTab === tab.id
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`relative pb-3 text-sm font-semibold transition-colors ${
-                isActive ? 'text-primary' : 'text-zinc-400 hover:text-zinc-200'
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative pb-3 text-sm font-medium transition-colors ${
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {tab.label}
               {isActive && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-primary" />
+                <span className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-primary" />
               )}
             </button>
           )
         })}
       </div>
 
-      {/* Tab 1: API Keys */}
+      {/* Tab 1: Accounts & API Keys */}
       {activeTab === 'keys' && (
-        <div className="space-y-6">
+        <div className="mt-6 space-y-6">
+          {/* Web Accounts (Browser OAuth Flow) */}
+          <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm space-y-4">
+            <div>
+              <div className="flex items-center justify-between">
+                <h3 className="font-title text-base font-medium text-foreground flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-primary" /> Connected Web Accounts (Live Crawling)
+                </h3>
+                <span className="rounded-full border border-border bg-secondary/60 px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                  Browser OAuth 2.0
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Click <strong className="text-foreground">“Connect on Browser”</strong> to authorize Postly in your web browser. Click <strong className="text-foreground">Continue / Authorize</strong> on the website, and Postly will automatically connect and show the 200 OK success page.
+              </p>
+            </div>
+
+            {/* Per-source Web Connection Cards */}
+            <div className="grid gap-3.5 sm:grid-cols-2 pt-4 border-t border-border">
+              {ACCOUNT_SOURCE_ROWS.map((row) => {
+                const { source, label, icon: Icon, hint } = row
+                const st = accountStatuses.find((a) => a.source === source)
+                const isConnecting = connectingSource === source
+                const configured = !!st?.configured
+                const connected = !!st?.connected
+                const expired = configured && !connected
+
+                return (
+                  <div
+                    key={source}
+                    className={`rounded-lg border p-4 flex flex-col justify-between space-y-3 transition-colors ${
+                      connected
+                        ? 'border-emerald-500/30 bg-emerald-500/[0.06]'
+                        : expired
+                        ? 'border-rose-500/30 bg-rose-500/[0.06]'
+                        : 'border-border bg-zinc-800/40'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary/80">
+                            <Icon className="h-5 w-5 text-foreground" />
+                          </span>
+                          <div>
+                            <h4 className="text-sm font-medium text-foreground">{label}</h4>
+                            <p className="text-[11px] text-muted-foreground line-clamp-1">{hint}</p>
+                          </div>
+                        </div>
+
+                        {connected ? (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Active
+                          </span>
+                        ) : expired ? (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
+                            <AlertTriangle className="h-3 w-3" />
+                            Expired
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            Disconnected
+                          </span>
+                        )}
+                      </div>
+
+                      {st?.message && (
+                        <div className={`text-xs font-mono rounded-lg px-2.5 py-1.5 border ${
+                          connected
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                            : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                        }`}>
+                          {st.message}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-3 border-t border-border/60">
+                      <Button
+                        size="sm"
+                        variant={connected ? 'secondary' : 'default'}
+                        onClick={() => connectWithBrowser(row)}
+                        disabled={isConnecting}
+                        className="flex-1"
+                      >
+                        {isConnecting ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        {isConnecting ? 'Waiting for 200 OK…' : connected ? 'Reconnect' : `Connect ${label}`}
+                      </Button>
+
+                      {configured && (
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => verifyAccount(row)}
+                          disabled={isConnecting}
+                          title="Verify live session status"
+                          className="h-8 w-8 hover:border-primary hover:text-primary"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${isConnecting ? 'animate-spin' : ''}`} />
+                        </Button>
+                      )}
+
+                      {configured && (
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => disconnectAccount(row)}
+                          title="Disconnect and clear saved session"
+                          className="h-8 w-8 hover:border-rose-500 hover:text-rose-500"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          {/* AI Providers & DB Key Groups */}
           {KEY_GROUPS.map((group) => (
-            <div
+            <section
               key={group.title}
-              className="rounded-2xl border border-[#232328] bg-[#141417] p-5 shadow-lg space-y-4"
+              className="rounded-[14px] border border-border bg-card p-5 shadow-sm space-y-4"
             >
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <h3 className="font-title text-base font-medium text-foreground flex items-center gap-2">
                   <KeyRound className="h-4 w-4 text-primary" /> {group.title}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">{group.description}</p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-[#232328]">
+              <div className="grid gap-4 sm:grid-cols-2 pt-4 border-t border-border">
                 {group.keys.map(({ key, label, placeholder }) => renderKeyField(key, label, placeholder))}
               </div>
-            </div>
+            </section>
           ))}
 
-          {/* Account Logins (Personalized Feeds) */}
-          <div className="rounded-2xl border border-[#232328] bg-[#141417] p-5 shadow-lg space-y-4">
-            <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <LogIn className="h-4 w-4 text-primary" /> Account Logins (Personalized Feeds)
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                Connect your own X, LinkedIn or Reddit account to crawl a personalized feed. Cookies
-                are encrypted and stored only on this device; crawling uses your account at low
-                volume; platform rules may restrict automated access — use at your own risk.
-              </p>
-            </div>
-
-            {/* Manual paste fallback (a full cookie jar is tolerated). */}
-            <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-[#232328]">
-              {ACCOUNT_KEY_FIELDS.map(({ key, label, placeholder }) => renderKeyField(key, label, placeholder))}
-            </div>
-
-            {/* Per-source in-app login + live connection status. */}
-            <div className="space-y-2.5 pt-2 border-t border-[#232328]">
-              {ACCOUNT_SOURCE_ROWS.map(({ source, label }) => {
-                const st = accountStatuses.find((a) => a.source === source)
-                const busy = loggingIn === source
-                const connected = !!st?.connected
-                const expired = !!st?.configured && !connected
-                const statusText = connected
-                  ? st?.message || 'Connected'
-                  : expired
-                  ? st?.message || 'Session expired or invalid'
-                  : 'Not connected'
-                const statusClass = connected
-                  ? 'text-emerald-400'
-                  : expired
-                  ? 'text-rose-400'
-                  : 'text-zinc-500'
-
-                return (
-                  <div
-                    key={source}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-[#27272a] bg-[#18181c] px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white">{label}</div>
-                      <div className={`text-xs mt-0.5 truncate ${statusClass}`}>{statusText}</div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => loginAccount(source)}
-                      disabled={busy}
-                      className="shrink-0 rounded-full border-[#2a2a30] text-xs hover:border-primary/40 hover:text-primary"
-                    >
-                      {busy ? (
-                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <LogIn className="mr-1.5 h-3.5 w-3.5" />
-                      )}
-                      {busy ? 'Waiting for sign-in…' : 'Login in app window'}
-                    </Button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
           <div className="flex justify-end pt-2">
-            <Button
-              onClick={saveKeys}
-              disabled={saving}
-              className="rounded-full bg-primary font-medium text-white shadow-lg hover:bg-primary/90 px-6"
-            >
+            <Button onClick={saveKeys} disabled={saving}>
               <Save className="mr-1.5 h-4 w-4" />
               {saving ? 'Encrypting & Saving…' : 'Save Keys'}
             </Button>
@@ -428,61 +535,56 @@ export default function SettingsPage() {
 
       {/* Tab 2: AI Models & Router Quotas */}
       {activeTab === 'models' && (
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-[#232328] bg-[#141417] p-5 shadow-lg space-y-4">
+        <div className="mt-6 space-y-6">
+          <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <h3 className="font-title text-base font-medium text-foreground flex items-center gap-2">
                   <Cpu className="h-4 w-4 text-primary" /> Multi-Model Fallback Router
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Automatic failover chain with per-provider daily quotas and cooldown protection.
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={resetUsage}
-                className="rounded-full border-[#2a2a30] text-xs hover:border-primary/40"
-              >
+              <Button size="sm" variant="outline" onClick={resetUsage}>
                 <RotateCcw className="mr-1 h-3.5 w-3.5" />
                 Reset Usage Counters
               </Button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 pt-3 border-t border-[#232328]">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 pt-4 border-t border-border">
               {models.map((m) => (
                 <div
                   key={m.provider}
-                  className="rounded-xl border border-[#27272a] bg-[#18181c] p-4 flex flex-col justify-between space-y-3"
+                  className="rounded-lg border border-border bg-zinc-800/40 p-4 flex flex-col justify-between space-y-3"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-white">{m.label}</span>
+                    <span className="text-sm font-medium text-foreground">{m.label}</span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                         m.available
-                          ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                          : 'border border-rose-500/30 bg-rose-500/10 text-rose-400'
+                          ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : 'border-rose-500/40 bg-rose-500/15 text-rose-600 dark:text-rose-400'
                       }`}
                     >
                       {m.available ? 'Ready' : 'Capped'}
                     </span>
                   </div>
 
-                  <div className="space-y-1 text-xs text-zinc-400 font-mono">
+                  <div className="space-y-1 text-xs text-muted-foreground font-mono">
                     <div className="flex justify-between">
                       <span>Type:</span>
-                      <span className="text-zinc-200 capitalize">{m.kind}</span>
+                      <span className="text-foreground capitalize">{m.kind}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Calls Today:</span>
-                      <span className="text-orange-400 font-bold">
+                      <span className="text-primary font-medium">
                         {m.callsToday} / {m.dailyCap}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Key Status:</span>
-                      <span className={m.hasKey ? 'text-emerald-400' : 'text-zinc-500'}>
+                      <span className={m.hasKey ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}>
                         {m.hasKey ? 'Configured' : 'Keyless Free Tier'}
                       </span>
                     </div>
@@ -490,11 +592,11 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </section>
 
-          <div className="rounded-2xl border border-[#232328] bg-[#141417] p-5 shadow-lg flex items-center justify-between">
+          <section className="rounded-[14px] border border-border bg-card p-5 shadow-sm flex items-center justify-between">
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <h3 className="font-title text-base font-medium text-foreground flex items-center gap-2">
                 <Ban className="h-4 w-4 text-primary" /> Rejection Learning Memory
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -506,20 +608,20 @@ export default function SettingsPage() {
               variant="outline"
               onClick={clearRejections}
               disabled={rejectionCount === 0}
-              className="rounded-full border-[#2a2a30] text-xs hover:border-rose-500 hover:text-rose-400"
+              className="hover:border-rose-500 hover:text-rose-500"
             >
               <Trash2 className="mr-1 h-3.5 w-3.5" />
               Clear Memory
             </Button>
-          </div>
+          </section>
         </div>
       )}
 
       {/* Tab 3: Preferences */}
       {activeTab === 'prefs' && (
-        <div className="rounded-2xl border border-[#232328] bg-[#141417] p-5 shadow-lg space-y-5">
+        <section className="mt-6 rounded-[14px] border border-border bg-card p-5 shadow-sm space-y-5">
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <h3 className="font-title text-base font-medium text-foreground flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-primary" /> Generation & Publishing Defaults
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -527,19 +629,19 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          <div className="space-y-4 pt-3 border-t border-[#232328]">
+          <div className="space-y-4 pt-4 border-t border-border">
             <div>
-              <label className="text-xs font-semibold text-zinc-300 block mb-2">Default Active Platforms</label>
+              <Label>Default Active Platforms</Label>
               <div className="flex flex-wrap gap-2">
                 {PLATFORMS.map((pl) => (
                   <button
                     key={pl}
                     type="button"
                     onClick={() => togglePlatform(pl)}
-                    className={`rounded-full border px-3.5 py-1 text-xs font-mono capitalize transition-all ${
+                    className={`rounded-full border px-3.5 py-1 text-xs capitalize transition-colors ${
                       selectedPlatforms.has(pl)
-                        ? 'border-primary bg-primary/20 text-primary font-bold shadow'
-                        : 'border-[#27272a] bg-[#18181c] text-zinc-400 hover:text-white'
+                        ? 'border-primary bg-primary/15 font-medium text-primary'
+                        : 'border-border bg-zinc-800/40 text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {pl}
@@ -550,80 +652,78 @@ export default function SettingsPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1">Default Post Style</label>
-                <select
+                <Label>Default Post Style</Label>
+                <Select
                   value={prefs.defaultStyle}
-                  onChange={(e) => savePref({ defaultStyle: e.target.value as any })}
-                  className="w-full rounded-xl border border-[#27272a] bg-[#18181c] px-3.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary capitalize"
+                  onChange={(e) => savePref({ defaultStyle: e.target.value as PostStyle })}
                 >
                   {POST_STYLES.map((st) => (
                     <option key={st} value={st} className="capitalize">{st}</option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1">Default Tone of Voice</label>
-                <select
+                <Label>Default Tone of Voice</Label>
+                <Select
                   value={prefs.defaultTone}
-                  onChange={(e) => savePref({ defaultTone: e.target.value as any })}
-                  className="w-full rounded-xl border border-[#27272a] bg-[#18181c] px-3.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary capitalize"
+                  onChange={(e) => savePref({ defaultTone: e.target.value as Tone })}
                 >
                   {TONES.map((tn) => (
                     <option key={tn} value={tn} className="capitalize">{tn}</option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
 
             <div className="pt-2">
-              <label className="flex items-center gap-2.5 text-sm text-zinc-200 cursor-pointer">
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
                 <input
                   type="checkbox"
                   checked={prefs.carouselDefault === 'on'}
                   onChange={(e) => savePref({ carouselDefault: e.target.checked ? 'on' : 'off' })}
-                  className="h-4 w-4 rounded border-[#27272a] bg-[#18181c] accent-[#f06e1e]"
+                  className="h-4 w-4 rounded border-border bg-zinc-800/40 accent-primary"
                 />
                 <span>Generate Carousel slides copy by default</span>
               </label>
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* Tab 4: About Postly */}
       {activeTab === 'about' && (
-        <div className="rounded-2xl border border-[#232328] bg-[#141417] p-6 shadow-lg space-y-5">
+        <section className="mt-6 rounded-[14px] border border-border bg-card p-6 shadow-sm space-y-5">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#f06e1e] to-[#fb923c] font-bold text-white text-2xl shadow-lg">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[14px] bg-primary font-num text-2xl font-semibold text-primary-foreground">
               P
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">Postly Desktop</h3>
+              <h3 className="font-title text-lg font-medium text-foreground">Postly Desktop</h3>
               <p className="text-xs text-muted-foreground">Version {version} · Free & Open-Source Desktop App</p>
             </div>
           </div>
 
-          <div className="space-y-3 pt-4 border-t border-[#232328] text-xs leading-relaxed text-zinc-300">
+          <div className="space-y-3 pt-4 border-t border-border text-xs leading-relaxed text-muted-foreground">
             <p>
               Postly helps software engineers and tech creators draft, schedule, and publish daily social content about AI, developer tools, and tech trends with automatic web crawlers and multi-model AI routing.
             </p>
-            <div className="rounded-xl border border-[#27272a] bg-[#18181c] p-4 space-y-2 font-mono">
+            <div className="rounded-lg border border-border bg-zinc-800/40 p-4 space-y-2 font-mono">
               <div className="flex justify-between">
-                <span className="text-zinc-400">Desktop Shell:</span>
-                <span className="text-zinc-200">Electron + Vite + React 19 + TypeScript</span>
+                <span className="text-muted-foreground">Desktop Shell:</span>
+                <span className="text-foreground">Electron + Vite + React 19 + TypeScript</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-400">Security Architecture:</span>
-                <span className="text-emerald-400">Context Isolation ON · CSP Enforced · safeStorage Encrypted</span>
+                <span className="text-muted-foreground">Security Architecture:</span>
+                <span className="text-emerald-600 dark:text-emerald-400">Context Isolation ON · CSP Enforced · safeStorage Encrypted</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-400">Google Calendar:</span>
-                <span className="text-emerald-400">1-Click Direct Synchronization & .ics Export</span>
+                <span className="text-muted-foreground">Google Calendar:</span>
+                <span className="text-emerald-600 dark:text-emerald-400">1-Click Direct Synchronization & .ics Export</span>
               </div>
             </div>
           </div>
-        </div>
+        </section>
       )}
     </div>
   )
