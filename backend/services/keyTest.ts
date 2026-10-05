@@ -22,6 +22,7 @@ export type SecretKey =
   | 'X_CT0'
   | 'LINKEDIN_LI_AT'
   | 'REDDIT_COOKIE'
+  | 'GITHUB_TOKEN'
 
 // Account-login cookie secrets. Each maps to the browser cookie name we extract
 // when the user pastes a full cookie jar instead of the bare value.
@@ -29,7 +30,8 @@ const COOKIE_FIELDS: Partial<Record<SecretKey, string>> = {
   X_AUTH_TOKEN: 'auth_token',
   X_CT0: 'ct0',
   LINKEDIN_LI_AT: 'li_at',
-  REDDIT_COOKIE: 'token_v2'
+  REDDIT_COOKIE: 'token_v2',
+  GITHUB_TOKEN: 'user_session'
 }
 const COOKIE_KEYS = new Set<string>(Object.keys(COOKIE_FIELDS))
 
@@ -207,6 +209,8 @@ export async function testApiKey(key: SecretKey): Promise<KeyProbeResult> {
         return await probeLinkedIn()
       case 'REDDIT_COOKIE':
         return await probeReddit()
+      case 'GITHUB_TOKEN':
+        return await probeGitHub()
       case 'DATABASE_URL': {
         const health = await checkDatabaseHealth()
         return health.ok
@@ -299,29 +303,88 @@ export async function probeLinkedIn(): Promise<KeyProbeResult> {
   }
 }
 
-/** Reddit: /api/v1/me with the token_v2 cookie (or reddit_session fallback). */
+/** Reddit: /api/v1/me or /user/me/about.json with token_v2 / reddit_session cookie. */
 export async function probeReddit(): Promise<KeyProbeResult> {
   const cookie = normalizeCookie('REDDIT_COOKIE', process.env.REDDIT_COOKIE ?? '')
-  if (!cookie) return { ok: false, message: 'Reddit needs the token_v2 cookie' }
+  if (!cookie) return { ok: false, message: 'Reddit needs the session cookie' }
   try {
+    const cookieHeader = cookie.includes('=')
+      ? cookie
+      : cookie.length > 50
+      ? `token_v2=${cookie}`
+      : `reddit_session=${cookie}; token_v2=${cookie}`
+
     const r = await probe('https://www.reddit.com/api/v1/me', {
-      cookie: `token_v2=${cookie}`,
-      'user-agent': process.env.REDDIT_USER_AGENT || 'Postly/0.1'
+      cookie: cookieHeader,
+      'user-agent': process.env.REDDIT_USER_AGENT || BROWSER_UA
     })
-    if (!r.ok)
-      return {
-        ok: false,
-        message:
-          r.status === 401 || r.status === 403
-            ? 'Reddit session expired or invalid — reconnect your account'
-            : `Reddit error ${r.status}`
+    if (r.ok) {
+      const json = safeJson(r.text)
+      const name = typeof json?.name === 'string' ? json.name : ''
+      return name ? { ok: true, message: `Connected as u/${name}`, handle: name } : { ok: true, message: 'Connected' }
+    }
+
+    const r2 = await probe('https://www.reddit.com/user/me/about.json', {
+      cookie: cookieHeader,
+      'user-agent': BROWSER_UA
+    })
+    if (r2.ok) {
+      const json = safeJson(r2.text)
+      const name = json?.data?.name
+      if (typeof name === 'string' && name) {
+        return { ok: true, message: `Connected as u/${name}`, handle: name }
       }
-    const json = safeJson(r.text)
-    const name = typeof json?.name === 'string' ? json.name : ''
-    return name
-      ? { ok: true, message: `Connected as u/${name}`, handle: name }
-      : { ok: true, message: 'Connected' }
+      return { ok: true, message: 'Connected' }
+    }
+
+    return {
+      ok: false,
+      message: 'Reddit session expired or invalid — reconnect your account'
+    }
   } catch {
     return { ok: false, message: 'Reddit session expired or invalid — could not verify' }
+  }
+}
+
+/** GitHub: /user with token or profile check with user_session cookie. */
+export async function probeGitHub(): Promise<KeyProbeResult> {
+  const token = normalizeCookie('GITHUB_TOKEN', process.env.GITHUB_TOKEN ?? '')
+  if (!token) return { ok: false, message: 'GitHub needs a Personal Access Token or user_session' }
+  try {
+    if (token.startsWith('ghp_') || token.startsWith('github_pat_') || token.startsWith('gho_')) {
+      const r = await probe('https://api.github.com/user', {
+        'user-agent': 'Postly/0.1 (github-probe)',
+        accept: 'application/vnd.github.v3+json',
+        authorization: `Bearer ${token}`
+      })
+      if (!r.ok)
+        return {
+          ok: false,
+          message:
+            r.status === 401 || r.status === 403
+              ? 'GitHub token expired or invalid — reconnect your account'
+              : `GitHub error ${r.status}`
+        }
+      const json = safeJson(r.text)
+      const login = typeof json?.login === 'string' ? json.login : ''
+      return login ? { ok: true, message: `Connected as @${login}`, handle: login } : { ok: true, message: 'Connected' }
+    } else {
+      // Web cookie probe against GitHub settings
+      const r = await probe('https://github.com/settings/profile', {
+        'user-agent': BROWSER_UA,
+        cookie: `user_session=${token}; logged_in=yes`
+      })
+      if (r.ok && !r.text.includes('action="/session"') && !r.text.includes('Sign in to GitHub')) {
+        const match =
+          r.text.match(/name="user-login"\s+content="([^"]+)"/) ||
+          r.text.match(/data-login="([^"]+)"/) ||
+          r.text.match(/itemprop="additionalName">([^<]+)</)
+        const login = match ? match[1].trim() : ''
+        return login ? { ok: true, message: `Connected as @${login}`, handle: login } : { ok: true, message: 'Connected' }
+      }
+      return { ok: false, message: 'GitHub session expired or invalid — reconnect your account' }
+    }
+  } catch {
+    return { ok: false, message: 'GitHub session expired or invalid — could not verify' }
   }
 }

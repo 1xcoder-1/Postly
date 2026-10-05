@@ -57,8 +57,8 @@ export type Platform = (typeof PLATFORMS)[number]
 // pasting cookies; the resulting cookie secrets are stored encrypted and flow to
 // the Python crawlers via process.env. These types carry NON-secret status only
 // (configured/connected flags, resolved handle, human message) to the renderer.
-export type AccountSource = 'x' | 'linkedin' | 'reddit'
-export const ACCOUNT_SOURCES: AccountSource[] = ['x', 'linkedin', 'reddit']
+export type AccountSource = 'x' | 'linkedin' | 'reddit' | 'github'
+export const ACCOUNT_SOURCES: AccountSource[] = ['x', 'linkedin', 'reddit', 'github']
 
 export interface AccountStatus {
   source: AccountSource

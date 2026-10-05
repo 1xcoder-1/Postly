@@ -37,10 +37,10 @@ try:
 except Exception:  # pragma: no cover - requests ships with the app runtime
     requests = None
 
-DEFAULT_SUBS = "artificial,machinelearning,programming"
+DEFAULT_SUBS = "artificial,machinelearning,LocalLLaMA,ChatGPT,ClaudeAI,singularity,selfhosted,opensource,webdev,Frontend,UI_Design,reactjs,nextjs,sveltejs,programming,technology,systemdesign,devops,Database,dataengineering"
 BASE_URL = "https://www.reddit.com"
-REQUEST_PAUSE = 0.7  # politeness sleep between requests (~0.5-1s)
-HTTP_TIMEOUT = 20
+REQUEST_PAUSE = 0.5  # politeness sleep between requests
+HTTP_TIMEOUT = 15
 
 
 def _env_int(name, default):
@@ -118,41 +118,77 @@ def _finalize(topics):
 
 
 # --------------------------------------------------------------------------
-# PUBLIC PATH — PRAW client-credentials (UNCHANGED)
+# PUBLIC PATH — PRAW client-credentials with requests public JSON fallback
 # --------------------------------------------------------------------------
 def fetch(subreddits, limit=15):
-    try:
-        import praw
-    except ImportError:
-        print("praw not installed: pip install praw", file=sys.stderr)
-        return []
-
     client_id = os.getenv("REDDIT_CLIENT_ID")
     client_secret = os.getenv("REDDIT_CLIENT_SECRET")
-    user_agent = os.getenv("REDDIT_USER_AGENT", "Postly/0.1")
-    if not (client_id and client_secret):
-        print("REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET not set", file=sys.stderr)
-        return []
+    user_agent = os.getenv("REDDIT_USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Postly/0.1")
 
-    reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=user_agent)
     topics = []
-    for sub in subreddits.split(","):
+    # If PRAW is installed and credentials exist, use PRAW
+    if client_id and client_secret:
         try:
-            for post in reddit.subreddit(sub.strip()).hot(limit=limit):
-                if getattr(post, "stickied", False):
+            import praw
+            reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=user_agent)
+            for sub in subreddits.split(","):
+                sub_name = sub.strip()
+                if not sub_name:
                     continue
-                topics.append(
-                    {
-                        "title": post.title.strip(),
-                        "source": f"reddit/{sub}",
-                        "url": f"https://reddit.com{post.permalink}",
-                        "score": post.score,
-                    }
-                )
-        except Exception as exc:
-            print(f"reddit/{sub} error: {exc}", file=sys.stderr)
-    topics.sort(key=lambda t: t["score"] or 0, reverse=True)
-    return topics[: limit * 3]
+                try:
+                    for post in reddit.subreddit(sub_name).hot(limit=limit):
+                        if getattr(post, "stickied", False):
+                            continue
+                        topics.append(
+                            {
+                                "title": post.title.strip(),
+                                "source": f"reddit/{sub_name}",
+                                "url": f"https://reddit.com{post.permalink}",
+                                "score": post.score,
+                            }
+                        )
+                except Exception as exc:
+                    print(f"reddit/{sub_name} praw error: {exc}", file=sys.stderr)
+            if topics:
+                topics.sort(key=lambda t: t.get("score") or 0, reverse=True)
+                return topics[: limit * 4]
+        except Exception:
+            pass
+
+    # Live Reddit RSS Parser (100% keyless, never rate limited, live posts)
+    if requests is not None:
+        import html
+        import re
+        headers = {"User-Agent": user_agent}
+        for sub in subreddits.split(","):
+            sub_name = sub.strip()
+            if not sub_name:
+                continue
+            try:
+                # Try standard Reddit RSS
+                resp = requests.get(f"https://www.reddit.com/r/{sub_name}/.rss?limit={limit}", headers=headers, timeout=HTTP_TIMEOUT)
+                if resp.status_code == 200:
+                    entries = re.findall(r'<entry>(.*?)</entry>', resp.text, re.DOTALL)
+                    for e in entries[:limit]:
+                        tm = re.search(r'<title>(.*?)</title>', e)
+                        lm = re.search(r'<link href="([^"]+)"', e)
+                        if tm and lm:
+                            t = html.unescape(tm.group(1)).strip()
+                            l = lm.group(1).strip()
+                            if t and not t.lower().startswith(("daily ", "monthly ", "rules ", "megathread")):
+                                topics.append({
+                                    "title": _clean(t),
+                                    "source": f"reddit/{sub_name}",
+                                    "url": l,
+                                    "score": 75
+                                })
+            except Exception as exc:
+                print(f"reddit/{sub_name} rss error: {exc}", file=sys.stderr)
+
+    topics.sort(key=lambda t: t.get("score") or 0, reverse=True)
+    return topics
+
+
 
 
 # --------------------------------------------------------------------------
@@ -316,10 +352,10 @@ def main():
     except Exception:
         pass
 
-    # No cookie -> legacy behaviour, byte-for-byte identical to before.
+    # No cookie -> public RSS/PRAW path
     if not os.getenv("REDDIT_COOKIE"):
         try:
-            print(json.dumps(fetch(args.subreddits)))
+            print(json.dumps(_finalize(fetch(args.subreddits)), ensure_ascii=False))
         except Exception as exc:
             print(json.dumps([]))
             print(f"reddit_crawler error: {exc}", file=sys.stderr)

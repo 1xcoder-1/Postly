@@ -1,5 +1,5 @@
 import { getSettings, type SettingKey } from './settingsService'
-import { probeX, probeLinkedIn, probeReddit, type KeyProbeResult } from './keyTest'
+import { probeX, probeLinkedIn, probeReddit, probeGitHub, type KeyProbeResult } from './keyTest'
 import { ACCOUNT_SOURCES, type AccountSource, type AccountStatus } from '../../src/shared/types'
 
 // Per-account connection status for the renderer (accounts:status). Reuses the
@@ -16,7 +16,8 @@ interface SourceConfig {
 const SOURCE_CONFIG: Record<AccountSource, SourceConfig> = {
   x: { keys: ['X_AUTH_TOKEN', 'X_CT0'], probe: probeX },
   linkedin: { keys: ['LINKEDIN_LI_AT'], probe: probeLinkedIn },
-  reddit: { keys: ['REDDIT_COOKIE'], probe: probeReddit }
+  reddit: { keys: ['REDDIT_COOKIE'], probe: probeReddit },
+  github: { keys: ['GITHUB_TOKEN'], probe: probeGitHub }
 }
 
 // Probes hit live platform endpoints, so cache briefly to avoid hammering them
