@@ -27,6 +27,8 @@ ONLY. Cookie values / secrets are never logged.
 import asyncio
 import json
 import os
+import random
+import re
 import sys
 from pathlib import Path
 
@@ -96,18 +98,20 @@ def _attr(obj, *names):
 
 
 def load_config():
-    """(accounts, queries) from references.json merged with env overrides."""
-    accounts, queries = [], []
+    """(accounts, queries, priority) from references.json merged with env."""
+    accounts, queries, priority = [], [], []
     try:
         data = json.loads((Path(__file__).with_name("references.json")).read_text(encoding="utf-8"))
         x = data.get("x", {})
         accounts = [a.strip().lstrip("@") for a in (x.get("accounts") or []) if a and a.strip()]
         queries = [q.strip() for q in (x.get("queries") or []) if q and q.strip()]
+        priority = [a.strip().lstrip("@") for a in (x.get("priority_accounts") or []) if a and a.strip()]
     except Exception as exc:  # missing/broken file just means "no seed"
         print(f"references.json not read: {exc}", file=sys.stderr)
     accounts += [a.strip().lstrip("@") for a in os.getenv("X_ACCOUNTS", "").split(",") if a.strip()]
     queries += [q.strip() for q in os.getenv("X_QUERIES", "").split(",") if q.strip()]
-    return list(dict.fromkeys(accounts)), list(dict.fromkeys(queries))
+    return (list(dict.fromkeys(accounts)), list(dict.fromkeys(queries)),
+            list(dict.fromkeys(priority)))
 
 
 def _load_verticals():
@@ -206,23 +210,141 @@ async def _following_handles(api):
     return []
 
 
-def _dedupe_cap(handles, cap, connected):
-    """Case-insensitive dedupe, then cap to `cap` (only meaningful when connected)."""
-    seen, out = set(), []
+def _dedupe_cap(handles, cap, connected, priority=()):
+    """Case-insensitive dedupe; when capping, priority handles are always kept
+    and only the remainder is sampled down."""
+    pset = {p.lower() for p in priority}
+    seen, pri, rest = set(), [], []
     for h in handles:
         k = h.lower()
         if k in seen:
             continue
         seen.add(k)
-        out.append(h)
-    if connected and len(out) > cap:
-        print(f"x: source list truncated to {cap} by X_MAX_ACCOUNTS", file=sys.stderr)
-        out = out[:cap]
+        (pri if k in pset else rest).append(h)
+    if connected and len(pri) + len(rest) > cap:
+        keep = pri[:cap]
+        slots = cap - len(keep)
+        tail = rest if slots >= len(rest) else random.sample(rest, slots)
+        print(f"x: kept {len(keep)} priority + sampled {len(tail)} of {len(rest)} "
+              f"others (X_MAX_ACCOUNTS={cap})", file=sys.stderr)
+        return keep + tail
+    return pri + rest
+
+
+# Keyless live feed: the AI labs, dev-tool makers, builders and tech news from
+# the reference ecosystem, mirrored through their PUBLIC RSS feeds. Keyless,
+# no rate limits, real article titles — verified live one by one.
+X_FEEDS = [
+    ("x/OpenAI", "https://openai.com/news/rss.xml"),
+    ("x/GoogleDeepMind", "https://deepmind.google/blog/rss.xml"),
+    ("x/GoogleAI", "https://blog.google/technology/ai/rss/"),
+    ("x/Microsoft", "https://www.microsoft.com/en-us/research/feed/"),
+    ("x/nvidia", "https://blogs.nvidia.com/feed/"),
+    ("x/huggingface", "https://huggingface.co/blog/feed.xml"),
+    ("x/mistral_ai", "https://mistral.ai/rss.xml"),
+    ("x/hardmaru", "https://sakana.ai/feed.xml"),
+    ("x/PyTorch", "https://pytorch.org/blog/feed.xml"),
+    ("x/Vercel", "https://vercel.com/atom"),
+    ("x/cloudflare", "https://blog.cloudflare.com/rss/"),
+    ("x/supabase", "https://supabase.com/blog/rss.xml"),
+    ("x/posthog", "https://posthog.com/rss.xml"),
+    ("x/ollama", "https://ollama.com/blog/rss.xml"),
+    ("x/n8n_io", "https://blog.n8n.io/rss/"),
+    ("x/github", "https://github.blog/feed/"),
+    ("x/e2b", "https://e2b.dev/rss.xml"),
+    ("x/reactjs", "https://react.dev/rss.xml"),
+    ("x/nodejs", "https://nodejs.org/en/feed/blog.xml"),
+    ("x/rustlang", "https://blog.rust-lang.org/feed.xml"),
+    ("x/golang", "https://go.dev/blog/feed.atom"),
+    ("x/typescript", "https://devblogs.microsoft.com/typescript/feed/"),
+    ("x/chromedev", "https://developer.chrome.com/blog/feed.xml"),
+    ("x/webdev", "https://web.dev/feed.xml"),
+    ("x/sveltejs", "https://svelte.dev/blog/rss.xml"),
+    ("x/bunproject", "https://bun.sh/rss.xml"),
+    ("x/prisma", "https://www.prisma.io/blog/rss.xml"),
+    ("x/docker", "https://www.docker.com/blog/feed/"),
+    ("x/kubernetes", "https://kubernetes.io/feed.xml"),
+    ("x/jetbrains", "https://blog.jetbrains.com/feed/"),
+    ("x/kagi", "https://blog.kagi.com/rss.xml"),
+    ("x/karpathy", "https://karpathy.bearblog.dev/feed/"),
+    ("x/piyushgarg_dev", "https://blog.piyushgarg.dev/rss.xml"),
+    ("x/simonw", "https://simonwillison.net/atom/everything/"),
+    ("x/lilianweng", "https://lilianweng.github.io/index.xml"),
+    ("x/huyenchip", "https://huyenchip.com/feed.xml"),
+    ("x/eugeneyan", "https://eugeneyan.com/rss/"),
+    ("x/dhh", "https://world.hey.com/dhh/feed.atom"),
+    ("x/cassidoo", "https://cassidoo.co/rss.xml"),
+    ("x/stratechery", "https://stratechery.com/feed/"),
+    ("x/interconnects", "https://www.interconnects.ai/feed"),
+    ("x/latentspace", "https://www.latent.space/feed"),
+    ("x/importai", "https://importai.substack.com/feed"),
+    ("x/techcrunch", "https://techcrunch.com/feed/"),
+    ("x/verge", "https://www.theverge.com/rss/index.xml"),
+    ("x/arstechnica", "https://feeds.arstechnica.com/arstechnica/index"),
+    ("x/wired", "https://www.wired.com/feed/rss"),
+    ("x/mittr", "https://www.technologyreview.com/feed/"),
+]
+
+# Sources WITHOUT a public RSS feed get a small Jina-mirrored bonus (capped —
+# Jina's anonymous tier is rate-limited, so this list stays tiny).
+JINA_BONUS = [
+    ("x/AnthropicAI", "https://www.anthropic.com/news"),
+    ("x/cursor_ai", "https://cursor.com/blog"),
+    ("x/LangChainAI", "https://blog.langchain.dev/"),
+    ("x/calcom", "https://cal.com/blog"),
+    ("x/levelsio", "https://levels.io/"),
+    ("x/steipete", "https://steipete.me/"),
+]
+
+
+def _jina_topics(item):
+    """Mirror one page via Jina Reader; ARTICLE LINKS ([Title](url)) are titles."""
+    import urllib.request
+
+    handle, blog_url = item
+    try:
+        req = urllib.request.Request(f"https://r.jina.ai/{blog_url}", headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            lines = resp.read().decode("utf-8", errors="replace").splitlines()
+    except Exception as exc:
+        print(f"x public {blog_url} error: {exc}", file=sys.stderr)
+        return []
+    host = blog_url.split("/")[2]
+    out, seen = [], set()
+    for line in lines:
+        for m in re.finditer(r"\[([^\]]{12,})\]\((https?://[^)\s]+)\)", line):
+            title, link = m.group(1), m.group(2)
+            # Same-site article links only (drop nav/home/external).
+            if f"//{host}/" not in link:
+                continue
+            path = link.split(host, 1)[1]
+            if not path or path in ("/", ""):
+                continue
+            title = re.sub(r"!\[[^\]]*\]", "", title)  # image alt text
+            title = _clean(title)
+            low = title.lower()
+            if (
+                not title
+                or title in seen
+                or len(title.split()) < 4
+                or any(b in low for b in ["subscribe", "cookie", "terms", "privacy", "sign in", "read more"])
+            ):
+                continue
+            seen.add(title)
+            out.append({
+                "title": title,
+                "source": handle,
+                "url": link,
+                "score": 150,
+            })
+            break  # one headline per link line is enough
+        if len(out) >= 6:
+            break
     return out
 
 
 async def _collect():
-    accounts, queries = load_config()
+    accounts, queries, priority = load_config()
 
     # --- account-login (cookie) detection --------------------------------
     auth_token = _extract_cookie(os.getenv("X_AUTH_TOKEN", ""), "auth_token")
@@ -230,44 +352,26 @@ async def _collect():
     connected = bool(auth_token and ct0)
 
     if not connected:
-        # Public live tech stream from leading tech accounts and engineering blogs
-        print("x: no account cookie (X_AUTH_TOKEN/X_CT0); using live public tech feed", file=sys.stderr)
-        public_topics = []
-        try:
-            import urllib.request
-            # Query live tech news updates from top builders
-            seed_sources = [
-                ("x/karpathy", "https://openai.com/news/"),
-                ("x/OpenAI", "https://openai.com/news/"),
-                ("x/AnthropicAI", "https://www.anthropic.com/news"),
-                ("x/Vercel", "https://vercel.com/blog"),
-                ("x/supabase", "https://supabase.com/blog"),
-                ("x/n8n_io", "https://blog.n8n.io/"),
-                ("x/LangChainAI", "https://blog.langchain.dev/"),
-            ]
-            for handle, blog_url in seed_sources:
-                try:
-                    req = urllib.request.Request(f"https://r.jina.ai/{blog_url}", headers={"User-Agent": "Postly/0.1"})
-                    with urllib.request.urlopen(req, timeout=6) as resp:
-                        lines = resp.read().decode("utf-8", errors="replace").splitlines()
-                        for line in lines:
-                            line = line.strip()
-                            if line.startswith("# ") or line.startswith("## "):
-                                title = line.lstrip("#").strip()
-                                title = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", title)
-                                if len(title.split()) >= 4 and not any(b in title.lower() for b in ["subscribe", "cookie", "terms", "privacy", "sign in"]):
-                                    public_topics.append({
-                                        "title": _clean(title),
-                                        "source": handle,
-                                        "url": blog_url,
-                                        "score": 150
-                                    })
-                                    if len(public_topics) >= 20:
-                                        break
-                except Exception:
-                    continue
-        except Exception as exc:
-            print(f"x public fallback error: {exc}", file=sys.stderr)
+        # Keyless live feed: RSS-first. X_FEEDS covers every AI lab, dev-tool
+        # maker, builder and tech-news source that publishes a public feed —
+        # keyless, no rate limits, real article titles, fetched in parallel.
+        print("x: no account cookie (X_AUTH_TOKEN/X_CT0); using live RSS tech feeds", file=sys.stderr)
+        from rss import fetch_feeds
+
+        public_topics = fetch_feeds(X_FEEDS, per_feed=5, timeout=12, workers=10, score=140)
+
+        # The few sources WITHOUT a public RSS feed get a small Jina-mirrored
+        # bonus — only when the RSS run came up short, keeping us far away from
+        # Jina's anonymous rate limits.
+        if len(public_topics) < 90:
+            try:
+                from concurrent.futures import ThreadPoolExecutor
+
+                with ThreadPoolExecutor(max_workers=6) as pool:
+                    for group in pool.map(_jina_topics, JINA_BONUS):
+                        public_topics += group
+            except Exception as exc:
+                print(f"x public jina bonus error: {exc}", file=sys.stderr)
         return _finalize(public_topics)
 
 
@@ -311,7 +415,7 @@ async def _collect():
     # ∪ logged-in following list, then dedupe + cap at X_MAX_ACCOUNTS.
     handles = list(accounts)
     handles += await _following_handles(api)
-    handles = _dedupe_cap(handles, X_MAX_ACCOUNTS, connected=True)
+    handles = _dedupe_cap(handles, X_MAX_ACCOUNTS, connected=True, priority=priority)
 
     # Personalized queries: seed queries ∪ verticals from references.json so a
     # connected refresh discovers fresh AI/industry topics across verticals.

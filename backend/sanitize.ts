@@ -12,12 +12,11 @@ import {
 } from '../src/shared/types'
 
 // ── Input sanitization at the persistence boundary ─────────────────────────
-// Everything that reaches savePost()/recordRejection() has travelled through
-// the renderer, the AI providers, or the Python crawlers — none of which we
-// fully trust. We never let raw strings hit Postgres (or the JSON fallback)
-// unchecked: strip control characters, clamp lengths, and reject enum values
-// that aren't in the canonical lists. This is defense-in-depth on top of the
-// DB's own enum/column constraints.
+// Everything that reaches savePost() has travelled through the renderer or
+// the Python crawlers — none of which we fully trust. We never let raw strings
+// hit Postgres (or the JSON fallback) unchecked: strip control characters,
+// clamp lengths, and reject enum values that aren't in the canonical lists.
+// This is defense-in-depth on top of the DB's own enum/column constraints.
 
 // C0/C1 control chars + DEL, but keep \n and \t so multi-line copy survives.
 // eslint-disable-next-line no-control-regex
@@ -165,18 +164,5 @@ export function sanitizePost(record: PostRecord): PostRecord {
     isDeleted: Boolean(record.isDeleted),
     createdAt: isoOrNull(record.createdAt) ?? new Date().toISOString(),
     updatedAt: isoOrNull(record.updatedAt) ?? new Date().toISOString()
-  }
-}
-
-/** Sanitized rejection inputs (reason/notes) for recordRejection(). */
-export function sanitizeRejection(
-  record: PostRecord,
-  reason: string | null,
-  notes: string | null
-): { record: PostRecord; reason: string | null; notes: string | null } {
-  return {
-    record: sanitizePost(record),
-    reason: nullableText(reason, 1000),
-    notes: nullableText(notes, 2000)
   }
 }

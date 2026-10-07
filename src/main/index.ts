@@ -1,5 +1,5 @@
 // Electron main process: creates the window and wires up IPC.
-import { app, BrowserWindow, shell, session } from 'electron'
+import { app, BrowserWindow, shell, session, Menu } from 'electron'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 // Load .env before the services read process.env.
@@ -28,16 +28,17 @@ process.on('unhandledRejection', (e) => console.error('[main rejection]', e))
 
 // Production CSP header (no 'unsafe-inline' for scripts). The browser enforces
 // this together with the meta tag, tightening the policy for the shipped app.
-// Clerk origins are the one renderer-side network exception (auth SDK).
+// The app talks to the outside world only from the main process (crawlers,
+// Gemini), so the renderer needs no remote origins at all.
 function enforceProductionCsp(): void {
   if (isDev) return
   const csp = [
     "default-src 'self'",
-    "script-src 'self' https://*.clerk.accounts.dev",
+    "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://image.pollinations.ai https://img.clerk.com https://images.clerk.com",
+    "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.clerk.accounts.dev https://api.clerk.com",
+    "connect-src 'self'",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
@@ -64,7 +65,7 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     backgroundColor: '#0b0b0f',
-    title: 'Postly',
+    title: 'Scout',
     icon: isDev ? join(__dirname, '../../build/icon.png') : join(process.resourcesPath, 'icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -120,6 +121,10 @@ app.whenReady().then(async () => {
   }
 
   enforceProductionCsp()
+  // Scout is a focused, self-contained studio: hide Electron's default
+  // File/Edit/View/Window menu bar. DevTools still opens programmatically in
+  // dev (see createWindow), and the app keeps its own in-page shortcuts.
+  Menu.setApplicationMenu(null)
   registerIpc() // initSettings() runs here and mirrors stored keys into process.env
   reportEnv(validateEnv()) // then validate the fully-resolved environment
 

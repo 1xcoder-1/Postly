@@ -1,6 +1,6 @@
 import { markDueScheduledReady } from '../db/postStore'
 
-// A deliberately simple, local scheduler. Postly has no server, so this runs in
+// A deliberately simple, local scheduler. Scout has no server, so this runs in
 // the Electron main process: every few minutes it promotes scheduled posts whose
 // time has arrived to 'pending' ("ready to publish"). It never publishes anything
 // by itself — publishing is a manual, human-approved step (see Drafts).

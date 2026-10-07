@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import { CRAWLERS_DIR, DATA_DIR } from '../paths'
+import { isTechTopic, techOnlyEnabled } from './techPolicy'
 import type { AgentReachReport, CrawlerTopic, DailyTopicsOptions } from '../../src/shared/types'
 
 // Node ↔ Python bridge for topic crawling.
@@ -211,7 +212,7 @@ function asAgentReachReport(raw: unknown): AgentReachReport {
 }
 
 // ── Relevance + ranking ──────────────────────────────────────────────────────
-// Postly boosts AI agents, developer tools, open-source alternatives,
+// Scout boosts AI agents, developer tools, open-source alternatives,
 // architecture roadmaps, and tech industry breakthroughs.
 const TECH_KEYWORDS = [
   'ai', 'llm', 'gpt', 'claude', 'gemini', 'grok', 'deepseek', 'deepseek-r1', 'deepseek-v3',
@@ -252,23 +253,51 @@ function relevance(title: string): number {
   return hits
 }
 
-/** Dedupe by normalized title, keep the higher-engagement copy. */
+/** Normalized title key: casings/punctuation can't hide a copy. */
+function titleKey(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+/** Normalized URL key: the same story syndicated under two headlines
+ *  (e.g. an X post and its HN thread both linking the article) collapses. */
+function urlKey(url: string | null): string | null {
+  if (!url) return null
+  return url.toLowerCase().replace(/\/$/, '')
+}
+
+/** Keep the higher-engagement copy per title AND per URL — two topics that
+ *  point at the same link or describe the same story are never both shown. */
 function dedupe(topics: CrawlerTopic[]): CrawlerTopic[] {
-  const byKey = new Map<string, CrawlerTopic>()
+  const byTitle = new Map<string, CrawlerTopic>()
   for (const topic of topics) {
-    const key = topic.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-    const prev = byKey.get(key)
-    if (!prev || (topic.score ?? 0) > (prev.score ?? 0)) byKey.set(key, topic)
+    const key = titleKey(topic.title)
+    const prev = byTitle.get(key)
+    if (!prev || (topic.score ?? 0) > (prev.score ?? 0)) byTitle.set(key, topic)
   }
-  return [...byKey.values()]
+  const byUrl = new Map<string, CrawlerTopic>()
+  const noUrl: CrawlerTopic[] = []
+  for (const topic of byTitle.values()) {
+    const key = urlKey(topic.url)
+    if (!key) {
+      noUrl.push(topic)
+      continue
+    }
+    const prev = byUrl.get(key)
+    if (!prev || (topic.score ?? 0) > (prev.score ?? 0)) byUrl.set(key, topic)
+  }
+  return [...byUrl.values(), ...noUrl]
 }
 
 function filterTopics(topics: CrawlerTopic[], minEngagement: number, highEngagementOnly: boolean): CrawlerTopic[] {
   const english = englishOnlyEnabled()
   const noTutorials = filterTutorialsEnabled()
+  const techOnly = techOnlyEnabled()
   return topics.filter((t) => {
     if (english && !isEnglish(t.title)) return false
     if (noTutorials && isTutorial(t.title)) return false
+    // Tech-only policy: every crawler passes this one funnel, so an off-topic
+    // story (biology, machinery, climate, sports, deal spam) can never reach a tab.
+    if (techOnly && !isTechTopic(t.title, t.source)) return false
     if (highEngagementOnly && t.score == null) return false
     if (minEngagement > 0 && (t.score ?? 0) < minEngagement) return false
     return true
@@ -303,7 +332,16 @@ function resolveSubreddits(extra?: string): string {
   const base = [
     'artificial', 'machinelearning', 'LocalLLaMA', 'ChatGPT', 'ClaudeAI', 'singularity',
     'selfhosted', 'opensource', 'webdev', 'Frontend', 'UI_Design', 'reactjs', 'nextjs',
-    'sveltejs', 'programming', 'technology', 'systemdesign', 'devops', 'Database', 'dataengineering'
+    'sveltejs', 'programming', 'technology', 'systemdesign', 'devops', 'Database', 'dataengineering',
+    'golang', 'rust', 'Python', 'TypeScript', 'javascript', 'node', 'docker', 'kubernetes', 'rails', 'laravel',
+    // Wider pool (58 subs): AI labs, languages, mobile, cloud, data, SRE — the
+    // crawler rotates a random slice per refresh so every sub stays fresh.
+    'OpenAI', 'StableDiffusion', 'Midjourney', 'LangChain', 'AI_Agents', 'ollama',
+    'dotnet', 'java', 'csharp', 'cpp', 'C_Programming', 'linux', 'Ubuntu',
+    'angular', 'vuejs', 'androiddev', 'iOSProgramming', 'cloudcomputing', 'aws', 'AZURE', 'googlecloud',
+    'flutterDev', 'reactnative', 'postgresql', 'MongoDB', 'Redis', 'SRE', 'ExperiencedDevs',
+    // Channels from the user's creator list with an official/community Reddit presence
+    'FreeCodeCamp', 'Harvard'
   ]
   const fromEnv = (process.env.REDDIT_SUBREDDITS || '').split(',')
   const fromOpt = (extra || '').split(',')
@@ -323,10 +361,10 @@ async function collectSources(subreddits: string): Promise<CrawlerTopic[]> {
 
   const tasks: Promise<CrawlerTopic[]>[] = [
     runCrawler('hn_crawler.py'),
-    runCrawler('reddit_crawler.py', ['--subreddits', subreddits], redditAccount ? 90000 : 25000),
-    runCrawler('dailydev_crawler.py'),
+    runCrawler('reddit_crawler.py', ['--subreddits', subreddits], redditAccount ? 90000 : 60000),
+    runCrawler('dailydev_crawler.py', [], 45000), // 120 topics across 13 tag feeds
     // GitHub trending: AI agent skills, open-source alternatives & system design comparisons
-    runCrawler('github_crawler.py', [], 45000),
+    runCrawler('github_crawler.py', [], 60000),
     // Bluesky via the public AT Protocol API (no key, no account): always on
     runCrawler('bsky_crawler.py', [], 45000),
     runCrawlerRaw('agent_reach_crawler.py', ['--skip-doctor'], 60000).then((r) => asAgentReachReport(r).topics),
@@ -335,12 +373,17 @@ async function collectSources(subreddits: string): Promise<CrawlerTopic[]> {
     // LinkedIn / any tech link via Jina Reader — live engineering blogs + Voyager feed.
     runCrawler('linkedin_crawler.py', [], 60000),
     // X (Twitter) live scrape via twscrape or seeds
-    runCrawler('x_crawler.py', [], xAccount ? 120000 : 45000),
+    runCrawler('x_crawler.py', [], xAccount ? 120000 : 60000),
     // Instagram live profile crawl
-    runCrawler('instagram_crawler.py', [], 45000)
+    runCrawler('instagram_crawler.py', [], 60000),
+    // Threads (Meta): famous profiles + verified tech-creator feeds. Always on.
+    runCrawler('threads_crawler.py', [], 60000),
+    // Facebook: Graph API / RSS-Bridge when configured; the same famous pages'
+    // verified newsroom RSS feeds keep the tab keyless and above 90+ otherwise.
+    runCrawler('facebook_crawler.py', [], 60000)
   ]
 
-  if (envOn('CRAWL4AI_URLS') || channelActive('linkedin')) tasks.push(runCrawler('web_crawler.py', [], 90000))
+  if (envOn('CRAWL4AI_URLS')) tasks.push(runCrawler('web_crawler.py', [], 90000))
 
   const groups = await Promise.all(tasks)
   return groups.flat()
@@ -365,6 +408,7 @@ export async function getDailyTopics(options: DailyTopicsOptions = {}): Promise<
     highEngagementOnly,
     english: englishOnlyEnabled(),
     tutorials: filterTutorialsEnabled(),
+    tech: techOnlyEnabled(),
     ig: envOn('IG_PROFILES') || envOn('IG_EXPORT_FILES') || envOn('IG_USER'),
     web: envOn('CRAWL4AI_URLS'),
     // Account-login breadth changes what the crawlers can return, so it must be
@@ -384,31 +428,4 @@ export async function getDailyTopics(options: DailyTopicsOptions = {}): Promise<
   const ranked = rankTopics(filterTopics(dedupe(combined), minEngagement, highEngagementOnly))
   topicsCache.set(key, { at: Date.now(), topics: ranked })
   return ranked
-}
-
-/** Lets the UI warn the user instead of silently showing zero topics. */
-export function pythonLooksAvailable(): boolean {
-  return !pythonMissingLogged
-}
-
-// ── Agent Reach channel health (separate, slow, cached) ──────────────────────
-let statusCache: { at: number; report: AgentReachReport } | null = null
-const STATUS_TTL_MS = 10 * 60 * 1000
-
-/**
- * True when the last cached `agent-reach doctor` run marked a channel as usable
- * (ok or warn). Lets the topic crawl enable channels by CAPABILITY rather than a
- * hard-coded env flag. Returns false before the first doctor report arrives.
- */
-function channelActive(name: string): boolean {
-  const info = statusCache?.report?.status?.[name]
-  return !!info && (info.status === 'ok' || info.status === 'warn')
-}
-
-export async function fetchAgentReachStatus(refresh = false): Promise<AgentReachReport> {
-  if (!refresh && statusCache && Date.now() - statusCache.at < STATUS_TTL_MS) return statusCache.report
-  const raw = await runCrawlerRaw('agent_reach_crawler.py', [], 240000)
-  const report = asAgentReachReport(raw)
-  if (Object.keys(report.status).length) statusCache = { at: Date.now(), report }
-  return report
 }

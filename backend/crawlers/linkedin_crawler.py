@@ -174,6 +174,34 @@ def load_links():
     return out
 
 
+# Keyless live feed: big-company engineering blogs + professional/business
+# sources, mirrored through their PUBLIC RSS feeds (verified live, one by
+# one). Keyless, no rate limits, real article titles.
+LINKEDIN_FEEDS = [
+    ("linkedin/netflix", "https://netflixtechblog.com/feed"),
+    ("linkedin/spotify", "https://engineering.atspotify.com/feed/"),
+    ("linkedin/stripe", "https://stripe.com/blog/feed.rss"),
+    ("linkedin/meta", "https://engineering.fb.com/feed/"),
+    ("linkedin/aws", "https://aws.amazon.com/blogs/aws/feed/"),
+    ("linkedin/pinterest", "https://medium.com/feed/pinterest-engineering"),
+    ("linkedin/airbnb", "https://medium.com/feed/airbnb-engineering"),
+    ("linkedin/gitlab", "https://about.gitlab.com/atom.xml"),
+    ("linkedin/discord", "https://discord.com/blog/rss.xml"),
+    ("linkedin/slack", "https://slack.engineering/feed/"),
+    ("linkedin/lyft", "https://eng.lyft.com/feed"),
+    ("linkedin/googledevs", "https://developers.googleblog.com/rss/"),
+    ("linkedin/ycombinator", "https://www.ycombinator.com/blog/rss.xml"),
+    ("linkedin/lenny", "https://www.lennysnewsletter.com/feed"),
+    ("linkedin/bbctech", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
+    ("linkedin/cnbctech", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"),
+    # Big-tech engineering + business tech — verified live, disjoint from the
+    # threads/facebook feed lists so tabs never share stories.
+    ("linkedin/dropbox-tech", "https://dropbox.tech/feed"),
+    ("linkedin/grab", "https://engineering.grab.com/feed.xml"),
+    ("linkedin/hashicorp", "https://www.hashicorp.com/blog/feed.xml"),
+]
+
+
 def read_via_jina(url):
     """Return markdown text for a public URL through Jina Reader, or ''."""
     target = "https://r.jina.ai/" + url
@@ -212,18 +240,29 @@ def topics_from_markdown(markdown, url):
 
 def fetch():
     from concurrent.futures import ThreadPoolExecutor
-    links = load_links()
-    if not links:
-        return []
-    out = []
-    def _worker(u):
-        md = read_via_jina(u)
-        return topics_from_markdown(md, u) if md else []
+    from rss import fetch_feeds
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        for res in executor.map(_worker, links):
-            out += res
-    return out
+    # RSS-first: 16 engineering/business feeds fetched in parallel — keyless,
+    # no rate limits, real titles. This alone clears the 90-topic bar.
+    topics = fetch_feeds(LINKEDIN_FEEDS, per_feed=8, timeout=12, workers=10, score=110)
+
+    # Bonus: Jina-mirror a capped slice of the reference posts. Jina's
+    # anonymous tier is rate-limited (~20 req/min), so we never fan out to
+    # the whole references.json list at once. The cap is sampled randomly so
+    # newly appended references rotate in too, instead of only the first 14
+    # ever being read.
+    links = load_links()
+    if len(links) > 14:
+        links = random.sample(links, 14)
+    if links:
+        def _worker(u):
+            md = read_via_jina(u)
+            return topics_from_markdown(md, u) if md else []
+
+        with ThreadPoolExecutor(max_workers=7) as executor:
+            for res in executor.map(_worker, links):
+                topics += res
+    return _finalize(topics)
 
 
 

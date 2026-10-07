@@ -53,5 +53,3 @@ export async function checkDatabaseHealth(timeoutMs = 8000): Promise<DbHealth> {
     return { ok: false, latencyMs: Date.now() - started, error: (e as Error).message }
   }
 }
-
-export { schema, sql }

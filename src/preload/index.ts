@@ -20,5 +20,3 @@ const api = {
 }
 
 contextBridge.exposeInMainWorld('postly', api)
-
-export type PostlyBridge = typeof api

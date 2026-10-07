@@ -109,8 +109,8 @@ export function PostPreview(props: PostPreviewProps) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Postly</span>
-              <Badge variant="outline" className="text-[10px]">@postly</Badge>
+              <span className="text-sm font-medium">Scout</span>
+              <Badge variant="outline" className="text-[10px]">@scout</Badge>
             </div>
             <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
               {truncated || <span className="text-muted-foreground">Start typing to see a preview…</span>}

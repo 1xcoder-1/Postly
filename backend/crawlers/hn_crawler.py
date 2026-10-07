@@ -16,8 +16,8 @@ def fetch():
     # Volume is env-tunable so "show me 50-100 topics" is a config change, not
     # a code change. Defaults pull a wide, recent, front-page-quality set.
     days = int(os.getenv("HN_DAYS", "3"))
-    hits = int(os.getenv("HN_HITS", "60"))
-    min_points = int(os.getenv("HN_MIN_POINTS", "20"))
+    hits = int(os.getenv("HN_HITS", "120"))
+    min_points = int(os.getenv("HN_MIN_POINTS", "10"))
     since = datetime.now(timezone.utc) - timedelta(days=days)
     params = {
         "tags": "story",

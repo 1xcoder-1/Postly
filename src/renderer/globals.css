@@ -131,3 +131,16 @@
     border-color: hsl(240 6% 78%);
   }
 }
+
+@layer utilities {
+  /* Hide the scrollbar visually but keep the element scrollable (wheel /
+   * trackpad / touch still work). Used on the page content scroller so the
+   * Dashboard and other pages don't show a Y-axis bar. */
+  .no-scrollbar {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* legacy Edge/IE */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chromium / Electron */
+  }
+}

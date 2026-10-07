@@ -26,6 +26,7 @@ Prints a JSON array of {title, source, url, score}. score = view count.
 """
 import json
 import os
+import random
 import re
 import subprocess
 import sys
@@ -52,10 +53,14 @@ def _envf(name, default):
 
 PER_CHANNEL = _envi("YT_PER_CHANNEL", 6)
 MAX_VIDEO_CHANNELS = _envi("YT_MAX_CHANNELS", 6)
+# Channel fetches run in parallel waves so a long seed list still fits the
+# time budget (5 workers x ~8s/call ~= 35-45 channels per refresh).
+YT_WORKERS = _envi("YT_WORKERS", 5)
+YT_WAVE = _envi("YT_WAVE", 9)
 # Keep the internal budget comfortably below the Node-side kill timeout
 # (crawlerService gives this crawler 150s). Worst case ~= BUDGET_S + CALL_TIMEOUT,
 # so 55 + 40 = 95s finishes well before 150s and the whole refresh stays snappy.
-BUDGET_S = _envf("YT_BUDGET_SECONDS", 55)
+BUDGET_S = _envf("YT_BUDGET_SECONDS", 75)
 CALL_TIMEOUT = 40
 SEP = "\t"
 FIELDS = ["id", "title", "view_count", "channel", "channel_id"]
@@ -68,12 +73,13 @@ def _clean(text):
 
 
 def load_refs():
-    videos, channels = [], []
+    videos, channels, priority = [], [], []
     try:
         data = json.loads((Path(__file__).with_name("references.json")).read_text(encoding="utf-8"))
         yt = data.get("youtube", {})
         videos = yt.get("videos", []) or []
         channels = yt.get("channels", []) or []
+        priority = yt.get("priority_channels", []) or []
     except Exception as exc:  # missing/broken file just means "no seed"
         print(f"references.json not read: {exc}", file=sys.stderr)
 
@@ -82,7 +88,20 @@ def load_refs():
     if env_refs:
         videos = env_refs  # explicit refs win entirely
     channels = list(dict.fromkeys(channels + env_channels))
-    return videos, channels
+    return videos, channels, priority
+
+
+def _channel_topics(terms):
+    """Fetch several channel terms in parallel; returns their topics."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(term):
+        url = channel_url_for(term)
+        entries = yt_flat(url, PER_CHANNEL) if url else yt_flat(f"ytsearch{PER_CHANNEL}:{term}", PER_CHANNEL)
+        return _to_topics(entries, fallback_name=term)
+
+    with ThreadPoolExecutor(max_workers=YT_WORKERS) as ex:
+        return [t for group in ex.map(one, terms) for t in group]
 
 
 def yt_flat(url, limit):
@@ -174,17 +193,26 @@ def _to_topics(entries, fallback_name="youtube"):
 
 def fetch():
     start = time.monotonic()
-    videos, channels = load_refs()
+    videos, channels, priority = load_refs()
+    # Creator-first ordering: youtube.priority_channels (the user's own channel
+    # list) is fetched at the START of every refresh; the rest of the pool only
+    # fills the budget left over. Without this, a random shuffle over 120+
+    # channels lets big pre-existing seeds crowd the requested creators out —
+    # a sequential budget only fits ~15 channels per run.
+    pset = {c.strip().lower().lstrip("@") for c in priority}
+    pri = [c for c in channels if c.strip().lower().lstrip("@") in pset]
+    rest = [c for c in channels if c.strip().lower().lstrip("@") not in pset]
+    random.shuffle(pri)
+    random.shuffle(rest)
+    ordered = pri + rest
     all_topics = []
     seen_channels = set()
 
-    # 1) Named channels / handles / URLs.
-    for term in channels:
+    # 1) Named channels / handles / URLs — parallel waves, priority first.
+    for i in range(0, len(ordered), YT_WAVE):
         if time.monotonic() - start > BUDGET_S:
             break
-        url = channel_url_for(term)
-        entries = yt_flat(url, PER_CHANNEL) if url else yt_flat(f"ytsearch{PER_CHANNEL}:{term}", PER_CHANNEL)
-        all_topics += _to_topics(entries, fallback_name=term)
+        all_topics += _channel_topics(ordered[i:i + YT_WAVE])
 
     # 2) Reference videos -> scrape their whole channel live (dedup by channel).
     resolved = 0

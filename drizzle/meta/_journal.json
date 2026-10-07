@@ -15,6 +15,13 @@
       "when": 1791012594562,
       "tag": "0001_brown_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791282197455,
+      "tag": "0002_good_rachel_grey",
+      "breakpoints": true
     }
   ]
 }

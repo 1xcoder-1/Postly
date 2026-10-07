@@ -48,7 +48,7 @@ def _link(item):
 
 
 def fetch():
-    limit = int(os.getenv("DEVTO_MAX", "60"))
+    limit = int(os.getenv("DEVTO_MAX", "120"))
     tags = [t.strip() for t in os.getenv("DEVTO_TAGS", ",".join(DEFAULT_TAGS)).split(",") if t.strip()]
     urls = [FEED] + [f"{FEED}?tag={t}" for t in tags]
 

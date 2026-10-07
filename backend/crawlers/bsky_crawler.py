@@ -1,14 +1,15 @@
 """Bluesky topics via the public AT Protocol API — no key, no account needed.
 
-Seeded by references.json -> bsky.authors / bsky.queries, extended by env
-(comma-separated, take priority when set):
-    BLUESKY_AUTHORS="openai.com,tsmc.bsky.social"   # handles to read
-    BLUESKY_QUERIES="AI agents, developer tools"    # search terms
+Seeded by references.json -> bsky.authors, extended by env (comma-separated,
+take priority when set):
+    BLUESKY_AUTHORS="openai.com,vercel.com"         # handles to read
 
 Uses only the standard library and the anonymous public endpoint
-(public.api.bsky.app), so it works out of the box. Best-effort: an unknown
-handle or a failed query is simply skipped, and the whole source degrades to
-[] so the app never blocks.
+(public.api.bsky.app), so it works out of the box. Only app.bsky.feed.getAuthorFeed
+is available anonymously now — searchPosts returns 403 without a session and
+unspecced.getPopular was retired (501), so the seed is a wide author list and
+the fetches run in parallel. Best-effort: an unknown handle is simply skipped,
+and the whole source degrades to [] so the app never blocks.
 
 Prints a JSON array of {title, source, url, score}. score = like count.
 """
@@ -17,12 +18,12 @@ import os
 import sys
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HOST = "https://public.api.bsky.app"
 UA = "Postly/0.1"
-PER_AUTHOR = int(os.getenv("BSKY_PER_AUTHOR", "15"))
-PER_QUERY = int(os.getenv("BSKY_PER_QUERY", "20"))
+PER_AUTHOR = int(os.getenv("BSKY_PER_AUTHOR", "30"))
 MIN_LIKES = int(os.getenv("BSKY_MIN_LIKES", "2"))
 
 
@@ -34,18 +35,16 @@ def _get(path, params):
 
 
 def load_config():
-    """(authors, queries) from references.json merged with env overrides."""
-    authors, queries = [], []
+    """authors from references.json merged with env overrides."""
+    authors = []
     try:
         data = json.loads((Path(__file__).with_name("references.json")).read_text(encoding="utf-8"))
         b = data.get("bsky", {})
         authors = [a.strip() for a in (b.get("authors") or []) if a and a.strip()]
-        queries = [q.strip() for q in (b.get("queries") or []) if q and q.strip()]
     except Exception as exc:  # missing/broken file just means "no seed"
         print(f"references.json not read: {exc}", file=sys.stderr)
     authors += [a.strip() for a in os.getenv("BLUESKY_AUTHORS", "").split(",") if a.strip()]
-    queries += [q.strip() for q in os.getenv("BLUESKY_QUERIES", "").split(",") if q.strip()]
-    return list(dict.fromkeys(authors)), list(dict.fromkeys(queries))
+    return list(dict.fromkeys(authors))
 
 
 def _clean(text):
@@ -73,9 +72,9 @@ def _from_post(post):
 
 
 def fetch():
-    authors, queries = load_config()
-    if not authors and not queries:
-        print("no bluesky refs (references.json/bsky or BLUESKY_AUTHORS/QUERIES); skipping", file=sys.stderr)
+    authors = load_config()
+    if not authors:
+        print("no bluesky refs (references.json/bsky or BLUESKY_AUTHORS); skipping", file=sys.stderr)
         return []
 
     topics, seen = [], set()
@@ -85,27 +84,22 @@ def fetch():
             seen.add(topic["url"])
             topics.append(topic)
 
-    # 1) Recent posts from each famous handle.
-    for actor in authors:
+    def author_feed(actor):
         try:
-            data = _get("/xrpc/app.bsky.feed.getAuthorFeed", {"actor": actor, "limit": PER_AUTHOR})
+            return _get("/xrpc/app.bsky.feed.getAuthorFeed", {"actor": actor, "limit": PER_AUTHOR})
         except Exception as exc:
             print(f"bluesky author '{actor}' failed: {exc}", file=sys.stderr)
-            continue
-        for item in data.get("feed", []):
-            add(_from_post(item.get("post")))
+            return {}
 
-    # 2) Latest search hits for each query (the reliable, handle-agnostic path).
-    for query in queries:
-        try:
-            data = _get("/xrpc/app.bsky.feed.searchPosts", {"q": query, "limit": PER_QUERY, "sort": "latest"})
-        except Exception as exc:
-            print(f"bluesky query '{query}' failed: {exc}", file=sys.stderr)
-            continue
-        for post in data.get("posts", []):
-            if (post.get("likeCount") or 0) < MIN_LIKES:
-                continue
-            add(_from_post(post))
+    # Anonymous access is author-feeds only (searchPosts = 403), so the seed
+    # list is wide and the reads run in parallel to stay under the timeout.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for data in pool.map(author_feed, authors):
+            for item in data.get("feed", []):
+                post = item.get("post") or {}
+                if (post.get("likeCount") or 0) < MIN_LIKES:
+                    continue
+                add(_from_post(post))
 
     return topics
 

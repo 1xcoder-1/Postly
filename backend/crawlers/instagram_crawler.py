@@ -26,6 +26,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 UA = "Postly/0.1"
@@ -91,7 +92,7 @@ def from_exports():
 
 # -------------------------------------------------------- live profile crawl --
 
-def from_profiles(profiles, per_profile=6):
+def from_profiles(profiles, per_profile=6, deadline=None):
     try:
         import instaloader
     except ImportError:
@@ -111,15 +112,27 @@ def from_profiles(profiles, per_profile=6):
     )
     user = os.getenv("IG_USER")
     pwd = os.getenv("IG_PASSWORD")
+    logged_in = False
     if user and pwd:
         try:
             loader.interactive_login = False
             loader.login(user, pwd)
+            logged_in = True
         except Exception as exc:
             print(f"instagram login failed (continuing anonymously): {exc}", file=sys.stderr)
 
     topics = []
+    tried = 0
     for name in profiles:
+        # Instagram blocks anonymous profile-metadata reads and stalls on them;
+        # cap the anonymous attempt and bail the moment the wall shows up.
+        if deadline and time.monotonic() > deadline:
+            print("instagram: profile crawl out of time budget", file=sys.stderr)
+            break
+        if not logged_in and tried >= 4:
+            print("instagram: anonymous rate-limit wall; skipping remaining profiles", file=sys.stderr)
+            break
+        tried += 1
         try:
             profile = instaloader.Profile.from_username(loader.context, name)
             if profile.is_private:
@@ -141,41 +154,120 @@ def from_profiles(profiles, per_profile=6):
                 if count >= per_profile:
                     break
         except Exception as exc:
+            msg = str(exc).lower()
             print(f"instagram/{name} error: {exc}", file=sys.stderr)
+            if any(k in msg for k in ("login", "401", "429", "ratelimit", "checkpoint", "challenge")) and not logged_in:
+                print("instagram: anonymous reads blocked; falling back to public showcases", file=sys.stderr)
+                break
     return topics
+
+
+def from_design_feeds():
+    """Keyless design/UI feeds via PUBLIC RSS — the reliable 90+ backbone.
+
+    Instagram itself blocks anonymous reads, so the section is fed by real
+    design/UX/visual-culture publications (all verified live, one by one).
+    """
+    from rss import fetch_feeds
+
+    ig_feeds = [
+        ("instagram/uxdesign", "https://uxdesign.cc/feed"),
+        ("instagram/uxplanet", "https://uxplanet.org/feed"),
+        ("instagram/smashing", "https://www.smashingmagazine.com/feed/"),
+        ("instagram/csstricks", "https://css-tricks.com/feed/"),
+        ("instagram/creativebloq", "https://www.creativebloq.com/feed"),
+        ("instagram/speckyboy", "https://speckyboy.com/feed/"),
+        ("instagram/webdesignerdepot", "https://www.webdesignerdepot.com/feed/"),
+        ("instagram/nngroup", "https://www.nngroup.com/feed/rss/"),
+        ("instagram/typewolf", "https://www.typewolf.com/feed"),
+        ("instagram/logrocket", "https://blog.logrocket.com/rss/"),
+        ("instagram/sidebar", "https://sidebar.io/feed.xml"),
+        ("instagram/sitepoint", "https://www.sitepoint.com/feed/"),
+        ("instagram/webdesignledger", "https://webdesignledger.com/feed/"),
+        ("instagram/freecodecamp", "https://www.freecodecamp.org/news/rss/"),
+    ]
+    topics = fetch_feeds(ig_feeds, per_feed=12, timeout=12, workers=10, score=90)
+
+    from lang import is_english
+
+    best, out = {}, []
+    for t in topics:
+        if not is_english(t["title"]):
+            continue
+        key = (t["url"] or t["title"]).lower()
+        if key not in best:
+            best[key] = t
+            out.append(t)
+    return out
 
 
 def from_public_showcases():
     """Live public UI/UX, tech design, and developer inspiration feeds."""
     import urllib.request
-    from lang import is_english
+    from concurrent.futures import ThreadPoolExecutor
     sources = [
         ("instagram/welovewebdesign", "https://godly.website/"),
         ("instagram/uiuxbunker", "https://mobbin.com/discover/web/latest"),
         ("instagram/interactiondesignorg", "https://land-book.com/"),
+        ("instagram/siteinspire", "https://www.siteinspire.com/"),
+        ("instagram/awwwards", "https://www.awwwards.com/websites/"),
+        ("instagram/httpster", "https://httpster.net/"),
+        ("instagram/minimalgallery", "https://minimal.gallery/"),
+        ("instagram/darkdesign", "https://dark.design/"),
+        ("instagram/refero", "https://refero.design/"),
+        ("instagram/lookupdesign", "https://lookup.design/"),
+        ("instagram/uijar", "https://uijar.com/"),
+        ("instagram/pttrns", "https://pttrns.com/"),
+        ("instagram/collectui", "https://collectui.com/"),
+        ("instagram/mobbinelements", "https://mobbin.com/elements"),
+        ("instagram/landbookweb", "https://land-book.com/websites"),
+        ("instagram/godlyweb", "https://godly.website/websites"),
+        ("instagram/curateddesign", "https://www.curated.design/"),
+        ("instagram/lapaninja", "https://www.lapa.ninja/")
     ]
-    topics = []
-    for author, ref_url in sources:
+
+    def _showcase_topics(item):
+        author, ref_url = item
         try:
-            req = urllib.request.Request(f"https://r.jina.ai/{ref_url}", headers={"User-Agent": "Postly/0.1"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                lines = resp.read().decode("utf-8", errors="replace").splitlines()
-                for line in lines:
-                    line = line.strip()
-                    if line.startswith("# ") or line.startswith("## ") or line.startswith("### "):
-                        title = re.sub(r"[#\[\]\(\)]", " ", line)
-                        title = _clean(title)
-                        if len(title.split()) >= 3 and is_english(title) and not any(b in title.lower() for b in ["subscribe", "cookie", "sign in", "privacy", "terms", "footer", "navigation"]):
-                            topics.append({
-                                "title": title,
-                                "source": author,
-                                "url": ref_url,
-                                "score": 95
-                            })
-                            if len(topics) >= 12:
-                                break
-        except Exception:
-            continue
+            req = urllib.request.Request(f"https://r.jina.ai/{ref_url}", headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                text = resp.read().decode("utf-8", errors="replace")
+        except Exception as exc:
+            print(f"ig showcase {ref_url} error: {exc}", file=sys.stderr)
+            return []
+        out, seen = [], set()
+        # Site-card LINKS carry the real names — these pages have no headings.
+        # The lookbehind/char-class skips nested-image wrappers ([![Img 1](t)](u)).
+        for m in re.finditer(r"(?<!\!)\[([^\]!\[]{4,})\]\((https?://[^)\s]+)\)", text):
+            title = re.sub(r"!\[[^\]]*\]", "", m.group(1))
+            title = _clean(title)
+            low = title.lower()
+            if (
+                not title
+                or title in seen
+                or len(title) < 6
+                or len(title.split()) < 2
+                or re.fullmatch(r"(?:image|img|photo|picture|video|shot)\s*\d*", low)  # thumb alt text
+                or any(b in low for b in ["subscribe", "cookie", "sign in", "sign up", "log in", "privacy", "terms", "footer", "navigation"])
+            ):
+                continue
+            seen.add(title)
+            out.append({
+                "title": title,
+                "source": author,
+                "url": ref_url,
+                "score": 95
+            })
+            if len(out) >= 12:
+                break
+        return out
+
+    topics = []
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for group in pool.map(_showcase_topics, sources):
+            topics += group
+            if len(topics) >= 100:
+                break
     return topics
 
 
@@ -184,15 +276,21 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
+    started = time.monotonic()
     topics = []
     try:
         topics += from_exports()
+        # RSS design feeds first: fast, keyless and reliable — the backbone
+        # that clears the 90-topic bar every run.
+        topics += from_design_feeds()
+        # Public showcases add gallery names as a bonus; the profile crawl is
+        # rate-limited by Instagram, so it only runs when an account is
+        # configured or nothing else produced topics.
+        topics += from_public_showcases()
         profiles = _profiles()
-        if profiles:
-            topics += from_profiles(profiles)
-        # If no profile or export topics obtained, fetch public design & developer showcases
-        if not topics:
-            topics += from_public_showcases()
+        logged_in = bool(os.getenv("IG_USER") and os.getenv("IG_PASSWORD"))
+        if profiles and (logged_in or len(topics) < 6):
+            topics += from_profiles(profiles, deadline=started + 45)
 
         # Dedup by url/title, keep higher likes.
         by_key = {}

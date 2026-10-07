@@ -9,13 +9,9 @@ interface PostsState {
   load: () => Promise<void>
   save: (record: PostRecord) => Promise<void>
   remove: (id: string) => Promise<void>
-  reject: (record: PostRecord, reason: string | null, notes?: string | null) => Promise<void>
   setStatus: (id: string, status: PostStatus) => Promise<void>
-  setPlatformPosted: (id: string, platform: Platform) => Promise<void>
   setPlatforms: (id: string, platforms: Platform[]) => Promise<void>
   duplicate: (record: PostRecord) => Promise<PostRecord>
-  upsertLocal: (record: PostRecord) => void
-  byStatus: (status: PostStatus) => PostRecord[]
 }
 
 export const usePosts = create<PostsState>((set, get) => ({
@@ -48,13 +44,6 @@ export const usePosts = create<PostsState>((set, get) => ({
     set({ posts: get().posts.filter((p) => p.id !== id) })
   },
 
-  async reject(record, reason, notes) {
-    await api.rejectPost(record, reason, notes ?? null)
-    set({
-      posts: get().posts.map((p) => (p.id === record.id ? { ...p, status: 'rejected' } : p))
-    })
-  },
-
   async setStatus(id, status) {
     await api.setStatus(id, status)
     set({
@@ -73,30 +62,8 @@ export const usePosts = create<PostsState>((set, get) => ({
     })
   },
 
-  // Mark one platform as posted and persist. When every selected platform is
-  // posted, the post rolls up to status 'posted'.
-  async setPlatformPosted(id, platform) {
-    const current = get().posts.find((p) => p.id === id)
-    if (!current) return
-    const postedAt = new Date().toISOString()
-    const publication: PublicationMap = {
-      ...current.publication,
-      [platform]: { status: 'posted', postedAt }
-    }
-    const allPosted =
-      current.platforms.length > 0 && current.platforms.every((pl) => publication[pl]?.status === 'posted')
-    const next: PostRecord = {
-      ...current,
-      publication,
-      status: allPosted ? 'posted' : current.status,
-      postedAt: allPosted ? current.postedAt ?? postedAt : current.postedAt,
-      updatedAt: postedAt
-    }
-    await get().save(next)
-  },
-
   // Change a post's selected platforms and keep `publication` in sync: newly
-  // selected platforms start 'ready', deselected ones are dropped (sanitize too).
+  // selected platforms start 'ready', deselected ones are dropped.
   async setPlatforms(id, platforms) {
     const current = get().posts.find((p) => p.id === id)
     if (!current) return
@@ -107,7 +74,7 @@ export const usePosts = create<PostsState>((set, get) => ({
     await get().save({ ...current, platforms, publication, updatedAt: new Date().toISOString() })
   },
 
-  // Clone a post into a fresh draft (new id, cleared schedule/publish state).
+  // Clone a post into a fresh draft (new id, cleared schedule state).
   async duplicate(record) {
     const iso = new Date().toISOString()
     const copy: PostRecord = {
@@ -124,18 +91,6 @@ export const usePosts = create<PostsState>((set, get) => ({
     }
     await get().save(copy)
     return copy
-  },
-
-  // Instant optimistic add before persistence round-trips.
-  upsertLocal(record) {
-    const posts = get().posts
-    const idx = posts.findIndex((p) => p.id === record.id)
-    if (idx >= 0) posts[idx] = record
-    else posts.unshift(record)
-    set({ posts: [...posts] })
-  },
-
-  byStatus(status) {
-    return get().posts.filter((p) => p.status === status)
   }
 }))
+
