@@ -19,6 +19,9 @@ export const posts = pgTable(
   'posts',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // Clerk user id this row belongs to. Every UI query filters on it, so
+    // each account only sees its own data in the shared DB.
+    userId: text('user_id').notNull(),
     topic: text('topic').notNull(),
     title: text('title').notNull(),
     content: text('content').notNull(), // PostRecord.description
@@ -44,7 +47,8 @@ export const posts = pgTable(
   (t) => [
     index('posts_status_idx').on(t.status),
     index('posts_created_at_idx').on(t.createdAt),
-    index('posts_scheduled_at_idx').on(t.scheduledAt)
+    index('posts_scheduled_at_idx').on(t.scheduledAt),
+    index('posts_user_id_idx').on(t.userId)
   ]
 )
 
@@ -54,6 +58,8 @@ export const rejectionFeedback = pgTable(
   'rejection_feedback',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // Owner (Clerk user id) — rejection learning is per-account too.
+    userId: text('user_id').notNull(),
     postId: uuid('post_id').references(() => posts.id, { onDelete: 'set null' }),
     topic: text('topic').notNull(),
     rejectedTitle: text('rejected_title').notNull(),
@@ -63,7 +69,7 @@ export const rejectionFeedback = pgTable(
     notes: text('notes'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
   },
-  (t) => [index('rejection_topic_idx').on(t.topic)]
+  (t) => [index('rejection_topic_idx').on(t.topic), index('rejection_user_id_idx').on(t.userId)]
 )
 
 // ── settings ───────────────────────────────────────────────────────────────
@@ -90,6 +96,7 @@ export type SettingRow = typeof settings.$inferSelect
 export function toPostRecord(row: PostRow): PostRecord {
   return {
     id: row.id,
+    userId: row.userId,
     topic: row.topic,
     title: row.title,
     description: row.content,

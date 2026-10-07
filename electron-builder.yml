@@ -3,9 +3,9 @@
 # free/open tooling. The renderer talks to the OS solely through IPC, so no
 # special entitlements are required for the MVP.
 
-appId: com.postly.app
-productName: Postly
-copyright: MIT — Postly
+appId: com.scout.app
+productName: Scout
+copyright: MIT — Scout
 
 directories:
   buildResources: build

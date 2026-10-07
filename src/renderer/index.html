@@ -7,17 +7,16 @@
       scripts so the Vite HMR / React Refresh preamble works). In production the
       main process additionally sends a stricter `script-src 'self'` header, and
       the browser enforces the intersection, so inline scripts end up blocked in
-      the shipped app. Renderer makes NO direct network calls except Clerk
-      (renderer-side auth SDK): *.clerk.accounts.dev for the clerk-js bundle and
-      FAPI, api.clerk.com for telemetry, img.clerk.com for avatars — everything
-      else goes through IPC to the main process — hence the tight connect-src.
+      the shipped app. Renderer makes NO direct network calls — everything goes
+      through IPC to the main process (crawlers, Gemini brief) — hence the tight
+      connect-src.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://image.pollinations.ai https://img.clerk.com https://images.clerk.com; font-src 'self' data:; connect-src 'self' ws://localhost:5173 http://localhost:5173 https://*.clerk.accounts.dev https://api.clerk.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws://localhost:5173 http://localhost:5173; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Postly</title>
+    <title>Scout</title>
   </head>
   <body>
     <div id="root"></div>

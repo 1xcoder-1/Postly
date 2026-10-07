@@ -7,8 +7,8 @@ export interface Shortcut {
 }
 
 export const SHORTCUTS: Shortcut[] = [
-  { keys: ['Ctrl', 'S'], label: 'Save the current variant as a draft (Generate)' },
-  { keys: ['Ctrl', 'Enter'], label: 'Mark the selected variant ready (Generate)' },
+  { keys: ['Ctrl', 'S'], label: 'Save the current post as a draft (Write Post)' },
+  { keys: ['Ctrl', 'Enter'], label: 'Mark the selected draft ready (Drafts)' },
   { keys: ['?'], label: 'Open / close this shortcuts panel' },
   { keys: ['Esc'], label: 'Close dialogs' }
 ]

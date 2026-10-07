@@ -37,10 +37,10 @@ try:
 except Exception:  # pragma: no cover - requests ships with the app runtime
     requests = None
 
-DEFAULT_SUBS = "artificial,machinelearning,LocalLLaMA,ChatGPT,ClaudeAI,singularity,selfhosted,opensource,webdev,Frontend,UI_Design,reactjs,nextjs,sveltejs,programming,technology,systemdesign,devops,Database,dataengineering"
+DEFAULT_SUBS = "artificial,machinelearning,LocalLLaMA,ChatGPT,ClaudeAI,singularity,selfhosted,opensource,webdev,Frontend,UI_Design,reactjs,nextjs,sveltejs,programming,technology,systemdesign,devops,Database,dataengineering,golang,rust,Python,TypeScript,javascript,node,docker,kubernetes,rails,laravel,OpenAI,StableDiffusion,Midjourney,LangChain,AI_Agents,ollama,dotnet,java,csharp,cpp,C_Programming,linux,Ubuntu,angular,vuejs,androiddev,iOSProgramming,cloudcomputing,aws,AZURE,googlecloud,flutterDev,reactnative,postgresql,MongoDB,Redis,SRE,ExperiencedDevs,FreeCodeCamp,Harvard"
 BASE_URL = "https://www.reddit.com"
 REQUEST_PAUSE = 0.5  # politeness sleep between requests
-HTTP_TIMEOUT = 15
+HTTP_TIMEOUT = 8
 
 
 def _env_int(name, default):
@@ -120,7 +120,7 @@ def _finalize(topics):
 # --------------------------------------------------------------------------
 # PUBLIC PATH — PRAW client-credentials with requests public JSON fallback
 # --------------------------------------------------------------------------
-def fetch(subreddits, limit=15):
+def fetch(subreddits, limit=25):
     client_id = os.getenv("REDDIT_CLIENT_ID")
     client_secret = os.getenv("REDDIT_CLIENT_SECRET")
     user_agent = os.getenv("REDDIT_USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Postly/0.1")
@@ -155,37 +155,150 @@ def fetch(subreddits, limit=15):
         except Exception:
             pass
 
-    # Live Reddit RSS Parser (100% keyless, never rate limited, live posts)
+    # Live Reddit RSS Parser (100% keyless, never rate limited, live posts).
+    # Fetched in PARALLEL — sequential requests over 20 subs took ~40s and
+    # blew past the Node-side 25s timeout, yielding zero Reddit topics.
     if requests is not None:
         import html
         import re
+        from concurrent.futures import ThreadPoolExecutor
+
         headers = {"User-Agent": user_agent}
-        for sub in subreddits.split(","):
-            sub_name = sub.strip()
-            if not sub_name:
-                continue
+
+        # Politeness gate: anonymous Reddit 429s hard when request starts
+        # bunch up (~10 req/min per IP at best, tighter while the IP is
+        # flagged). Serialize STARTS ~2.0s apart so the parallel pool never
+        # trips it (the per-sub work itself still overlaps).
+        import threading
+        _gate = threading.Lock()
+        _last = [0.0]
+
+        def _throttle():
+            with _gate:
+                wait = _last[0] + 2.0 - time.monotonic()
+                if wait > 0:
+                    time.sleep(wait)
+                _last[0] = time.monotonic()
+
+        def _sub_topics(sub_name):
+            out = []
+            _throttle()
             try:
-                # Try standard Reddit RSS
+                # Reddit's anonymous cap trips 429 occasionally even when
+                # paced — one short backoff + retry recovers those subs.
                 resp = requests.get(f"https://www.reddit.com/r/{sub_name}/.rss?limit={limit}", headers=headers, timeout=HTTP_TIMEOUT)
-                if resp.status_code == 200:
-                    entries = re.findall(r'<entry>(.*?)</entry>', resp.text, re.DOTALL)
-                    for e in entries[:limit]:
-                        tm = re.search(r'<title>(.*?)</title>', e)
-                        lm = re.search(r'<link href="([^"]+)"', e)
-                        if tm and lm:
-                            t = html.unescape(tm.group(1)).strip()
-                            l = lm.group(1).strip()
-                            if t and not t.lower().startswith(("daily ", "monthly ", "rules ", "megathread")):
-                                topics.append({
-                                    "title": _clean(t),
-                                    "source": f"reddit/{sub_name}",
-                                    "url": l,
-                                    "score": 75
-                                })
+                if resp.status_code == 429:
+                    time.sleep(2.5)
+                    resp = requests.get(f"https://www.reddit.com/r/{sub_name}/.rss?limit={limit}", headers=headers, timeout=HTTP_TIMEOUT)
+                if resp.status_code != 200:
+                    print(f"reddit/{sub_name} rss HTTP {resp.status_code}", file=sys.stderr)
+                    return out
+                entries = re.findall(r'<entry>(.*?)</entry>', resp.text, re.DOTALL)
+                for e in entries[:limit]:
+                    tm = re.search(r'<title>(.*?)</title>', e)
+                    lm = re.search(r'<link href="([^"]+)"', e)
+                    if tm and lm:
+                        t = html.unescape(tm.group(1)).strip()
+                        l = lm.group(1).strip()
+                        if t and not t.lower().startswith(("daily ", "monthly ", "rules ", "megathread")):
+                            out.append({
+                                "title": _clean(t),
+                                "source": f"reddit/{sub_name}",
+                                "url": l,
+                                "score": 75
+                            })
             except Exception as exc:
                 print(f"reddit/{sub_name} rss error: {exc}", file=sys.stderr)
+            return out
+
+        subs = [s.strip() for s in subreddits.split(",") if s.strip()]
+        # Reddit caps anonymous reads per IP (~10 req/min, and it 429-cascades
+        # the moment pacing slips) — 2.0s pacing plus a rotated 12-sub slice
+        # stays under the cap, the 58-sub pool rotates coverage across
+        # refreshes, and the rolling last-good cache below carries the volume.
+        import random
+        if len(subs) > 12:
+            subs = random.sample(subs, 12)
+
+        # Internal deadline: the Node side SIGKILLs this process at ~60s, and a
+        # killed process prints NOTHING. 45s fits 12 paced requests (last one
+        # starts ~33s in, HTTP timeout 8s) with slack — always return whatever
+        # was gathered before that — partial beats zero. (Reddit also tarpits
+        # slow-drip responses that evade socket timeouts, so the wall-clock
+        # deadline is the only reliable guard.)
+        deadline = time.monotonic() + _env_int("REDDIT_DEADLINE", 45)
+        pool = ThreadPoolExecutor(max_workers=3)
+        futures = [pool.submit(_sub_topics, s) for s in subs]
+        dropped = 0
+        for fut in futures:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                dropped += 1
+                continue
+            try:
+                topics += fut.result(timeout=remaining)
+            except Exception:
+                dropped += 1
+        for fut in futures:
+            fut.cancel()
+        pool.shutdown(wait=False)
+        if dropped:
+            print(f"reddit: internal deadline; skipped {dropped}/{len(futures)} subs", file=sys.stderr)
 
     topics.sort(key=lambda t: t.get("score") or 0, reverse=True)
+    return _with_last_good(topics)
+
+
+def _last_good_path():
+    """Where the last good Reddit crawl is persisted (writable data dir)."""
+    data_dir = os.getenv("POSTLY_DATA_DIR") or str(Path(__file__).resolve().parent)
+    return Path(data_dir) / "reddit-topics.json"
+
+
+def _with_last_good(topics):
+    """Rolling resilience cache: persist every crawl (capped 300). When the
+    live run is thin — Reddit's anonymous 429 wall — top it up with the most
+    recent topics from previous runs so the Reddit section always clears 90+.
+    (Everything in the cache is a real topic a previous live crawl fetched.)"""
+    fill_target = _env_int("REDDIT_FILL_TARGET", 110)
+
+    def _key(t):
+        return (t.get("url") or "") or ("title:" + (t.get("title") or "").lower())
+
+    try:
+        path = _last_good_path()
+        cached = []
+        if path.exists():
+            try:
+                cached = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                cached = []
+
+        if len(topics) < fill_target and cached:
+            seen = {_key(t) for t in topics}
+            extra = [t for t in cached if _key(t) not in seen][: fill_target - len(topics)]
+            if extra:
+                print(
+                    f"reddit: thin live run ({len(topics)}); topped up with {len(extra)} recent topics from previous crawls",
+                    file=sys.stderr,
+                )
+            topics += extra
+
+        if topics:
+            # Rolling pool: live topics first, then previously cached ones.
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                seen = {_key(t) for t in topics}
+                merged = list(topics)
+                for t in cached:
+                    if _key(t) not in seen:
+                        merged.append(t)
+                        seen.add(_key(t))
+                path.write_text(json.dumps(merged[:300], ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                pass
+    except Exception:
+        pass
     return topics
 
 

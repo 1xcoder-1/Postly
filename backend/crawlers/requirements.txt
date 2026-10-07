@@ -12,6 +12,8 @@
 #                         seed in references.json -> bsky, extend BLUESKY_AUTHORS/
 #                         BLUESKY_QUERIES)
 #   agent_reach_crawler.py  RSS/V2EX/HN + `agent-reach doctor` status
+#   rss.py                shared RSS/Atom fetcher used by x/linkedin/instagram
+#                         (feedparser if installed — optional, regex fallback)
 #   lang.py               shared English-only + tutorial-style text filters (no deps)
 #
 # ── YouTube (reference-driven, LIVE) — needs yt-dlp ─────────────────────────

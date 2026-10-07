@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Trash2, Send, X, PenLine, Inbox, CalendarClock, CalendarX2, Copy, Search, FileQuestion } from 'lucide-react'
+import { Trash2, Check, PenLine, Inbox, CalendarClock, CalendarX2, Copy, Search, FileQuestion, CheckCheck } from 'lucide-react'
 import type { PostRecord, Platform } from '@shared/types'
 import { PLATFORMS } from '@shared/types'
 import { usePosts } from '@/renderer/store'
 import { Card, CardContent, CardHeader } from '@/renderer/components/ui/card'
 import { Button } from '@/renderer/components/ui/button'
 import { Input, Textarea, Label, Select } from '@/renderer/components/ui/input'
-import { PageHeader } from '@/renderer/components/ui/PageHeader'
+// Page title now lives in the top navbar — PageHeader no longer needed here.
 import { EmptyState } from '@/renderer/components/ui/EmptyState'
 import { Segmented } from '@/renderer/components/ui/Segmented'
-import { RejectDialog } from '@/renderer/components/RejectDialog'
-import { ReadyToPost } from '@/renderer/components/ReadyToPost'
 import { ErrorBanner } from '@/renderer/components/ErrorBanner'
 import { StatusBadge, Hashtags } from '@/renderer/components/PostBits'
 
@@ -19,32 +17,33 @@ const dateTimeInputClass =
   'h-9 rounded-[8px] border border-input bg-zinc-800/40 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-primary/50'
 
 export default function Drafts() {
-  const { posts, save, remove, reject, setStatus, setPlatforms, duplicate, load, error } = usePosts()
+  const { posts, save, remove, setStatus, setPlatforms, duplicate, load, error } = usePosts()
   const [editing, setEditing] = useState<string | null>(null)
-  const [rejecting, setRejecting] = useState<PostRecord | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [tab, setTab] = useState('active')
   const [query, setQuery] = useState('')
-  const [platform, setPlatform] = useState<'all' | Platform>('all')
+  const [platform, setPlatform] = useState<Platform>(PLATFORMS[0])
   const [sort, setSort] = useState<'new' | 'old'>('new')
 
   const active = posts.filter((p) => p.status === 'draft' || p.status === 'pending' || p.status === 'scheduled')
-  const posted = posts.filter((p) => p.status === 'posted')
+  const done = posts.filter((p) => p.status === 'posted')
 
   // Search (title/description/topic), platform filter, and date sort applied to
   // whichever tab is showing.
   const list = useMemo(() => {
-    const base = (tab === 'active' ? active : posted).filter((p) => {
-      if (platform !== 'all' && !p.platforms.includes(platform)) return false
+    const base = (tab === 'active' ? active : done).filter((p) => {
+      if (!p.platforms.includes(platform)) return false
       const q = query.trim().toLowerCase()
       if (q && !(`${p.title} ${p.description} ${p.topic}`.toLowerCase().includes(q))) return false
       return true
     })
     const dir = sort === 'new' ? -1 : 1
     return base.sort((a, b) => dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
-  }, [tab, active, posted, platform, query, sort])
+  }, [tab, active, done, platform, query, sort])
 
-  const filtersOn = query.trim() !== '' || platform !== 'all'
+  // The platform picker is a mandatory per-platform view (no "All platforms"
+  // option — removed by design), so only the search box is a clearable filter.
+  const filtersOn = query.trim() !== ''
 
   // Save that surfaces server-side validation (e.g. past schedule) as a toast.
   async function update(next: PostRecord) {
@@ -75,10 +74,10 @@ export default function Drafts() {
     toast.success('Schedule cancelled — back to draft')
   }
 
-  async function markPosted(p: PostRecord) {
-    if (!p.platforms.length) return toast.error('Pick at least one platform')
-    await update({ ...p, status: 'posted', scheduledAt: null })
-    toast.success('Marked as posted')
+  // Manual bookkeeping: the app never posts anywhere — you mark it done yourself.
+  async function markDone(p: PostRecord) {
+    await update({ ...p, status: 'posted', scheduledAt: null, postedAt: new Date().toISOString() })
+    toast.success('Marked done')
   }
 
   async function onDuplicate(p: PostRecord) {
@@ -124,33 +123,19 @@ export default function Drafts() {
     }
   }
 
-  async function confirmReject(p: PostRecord, reason: string, notes: string | null) {
-    try {
-      await reject(p, reason, notes)
-      toast.success('Rejected — the AI will avoid this next time')
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setRejecting(null)
-    }
-  }
-
   return (
     <div>
-      <PageHeader
-        title="Drafts"
-        description="Edit, choose platforms, schedule, publish or reject."
-        actions={
-          <Segmented
-            value={tab}
-            onChange={setTab}
-            options={[
-              { value: 'active', label: 'Needs action', count: active.length },
-              { value: 'posted', label: 'Posted', count: posted.length }
-            ]}
-          />
-        }
-      />
+      {/* Tab switcher only — title and description removed in favor of the navbar */}
+      <div className="mb-6 flex items-center justify-end">
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'active', label: 'Active', count: active.length },
+            { value: 'done', label: 'Done', count: done.length }
+          ]}
+        />
+      </div>
 
       {error && <ErrorBanner message={error} onRetry={load} />}
 
@@ -168,11 +153,10 @@ export default function Drafts() {
         </div>
         <Select
           value={platform}
-          onChange={(e) => setPlatform(e.target.value as 'all' | Platform)}
+          onChange={(e) => setPlatform(e.target.value as Platform)}
           className="w-full sm:w-40"
           aria-label="Filter by platform"
         >
-          <option value="all">All platforms</option>
           {PLATFORMS.map((pl) => (
             <option key={pl} value={pl} className="capitalize">
               {pl}
@@ -194,7 +178,7 @@ export default function Drafts() {
         <div className="mb-4 flex items-center gap-3 rounded-lg border bg-card px-4 py-2">
           <span className="text-sm font-medium">{selected.size} selected</span>
           <Button size="sm" variant="outline" onClick={() => bulkStatus('pending')}>
-            <Send /> Mark ready
+            <Check /> Mark ready
           </Button>
           <Button size="sm" variant="destructive" onClick={bulkDelete}>
             <Trash2 /> Delete
@@ -215,20 +199,17 @@ export default function Drafts() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  setQuery('')
-                  setPlatform('all')
-                }}
+                onClick={() => setQuery('')}
               >
-                Clear filters
+                Clear search
               </Button>
             }
           />
         ) : (
           <EmptyState
-            icon={tab === 'active' ? <Inbox /> : <Send />}
-            title={tab === 'active' ? 'Nothing to review' : 'Nothing posted yet'}
-            description={tab === 'active' ? 'Generate a post to fill your pipeline.' : 'Mark a draft as posted and it will show up here.'}
+            icon={tab === 'active' ? <Inbox /> : <CheckCheck />}
+            title={tab === 'active' ? 'Nothing in progress' : 'Nothing done yet'}
+            description={tab === 'active' ? 'Write a post to fill your pipeline.' : 'Mark a draft done and it will show up here.'}
           />
         )
       ) : (
@@ -317,14 +298,12 @@ export default function Drafts() {
                     ))}
                   </div>
 
-                  {(p.status === 'pending' || p.status === 'scheduled') && (
-                    <ReadyToPost post={p} />
-                  )}
-
                   <div className="flex flex-wrap gap-2 pt-1">
-                    <Button size="sm" onClick={() => markPosted(p)}>
-                      <Send /> Mark posted
-                    </Button>
+                    {p.status !== 'posted' && (
+                      <Button size="sm" onClick={() => markDone(p)}>
+                        <CheckCheck /> Mark done
+                      </Button>
+                    )}
                     {p.status === 'scheduled' && (
                       <Button size="sm" variant="outline" onClick={() => cancelSchedule(p)}>
                         <CalendarX2 /> Cancel schedule
@@ -332,9 +311,6 @@ export default function Drafts() {
                     )}
                     <Button size="sm" variant="outline" onClick={() => onDuplicate(p)}>
                       <Copy /> Duplicate
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setRejecting(p)}>
-                      <X /> Reject
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => remove(p.id)}>
                       <Trash2 /> Delete
@@ -345,14 +321,6 @@ export default function Drafts() {
             )
           })}
         </div>
-      )}
-
-      {rejecting && (
-        <RejectDialog
-          post={rejecting}
-          onCancel={() => setRejecting(null)}
-          onConfirm={(reason, notes) => confirmReject(rejecting, reason, notes)}
-        />
       )}
     </div>
   )

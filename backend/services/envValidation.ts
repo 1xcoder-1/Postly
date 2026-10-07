@@ -17,13 +17,10 @@ export interface EnvReport {
 type Rule = { pattern: RegExp; hint: string }
 
 // Loose shape checks — a wrong prefix almost always means a copy/paste slip.
+// Only Gemini is used for AI now, so just its key (plus the DB URL) is checked.
 const RULES: Record<string, Rule> = {
   DATABASE_URL: { pattern: /^postgres(ql)?:\/\//i, hint: 'must start with postgres:// or postgresql://' },
-  GROQ_API_KEY: { pattern: /^gsk_/, hint: 'Groq keys start with gsk_' },
-  GEMINI_API_KEY: { pattern: /^AIza/, hint: 'Gemini keys start with AIza' },
-  OPENROUTER_API_KEY: { pattern: /^sk-or-/, hint: 'OpenRouter keys start with sk-or-' },
-  HUGGINGFACE_API_KEY: { pattern: /^hf_/, hint: 'Hugging Face tokens start with hf_' },
-  CLOUDFLARE_API_TOKEN: { pattern: /^[A-Za-z0-9_-]{12,}$/, hint: 'looks too short to be a Cloudflare token' }
+  GEMINI_API_KEY: { pattern: /^(AIza|AQ\.)/, hint: 'Gemini keys start with AIza (classic) or AQ. (new AI Studio format)' }
 }
 
 export function validateEnv(env: NodeJS.ProcessEnv = process.env): EnvReport {
@@ -39,14 +36,6 @@ export function validateEnv(env: NodeJS.ProcessEnv = process.env): EnvReport {
       issues.push({ key, level: 'warn', message: `${key} may be invalid: ${rule.hint}` })
     }
   }
-
-  // Cloudflare pairing: account id + token must both exist or neither is usable.
-  const cfToken = (env.CLOUDFLARE_API_TOKEN ?? '').trim()
-  const cfAccount = (env.CLOUDFLARE_ACCOUNT_ID ?? '').trim()
-  if (cfToken && !cfAccount)
-    issues.push({ key: 'CLOUDFLARE_ACCOUNT_ID', level: 'error', message: 'token set but CLOUDFLARE_ACCOUNT_ID missing' })
-  if (cfAccount && !cfToken)
-    issues.push({ key: 'CLOUDFLARE_API_TOKEN', level: 'error', message: 'account id set but CLOUDFLARE_API_TOKEN missing' })
 
   // Reddit needs the trio together.
   const redditSet = ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET', 'REDDIT_USER_AGENT'].filter((k) => (env[k] ?? '').trim())
