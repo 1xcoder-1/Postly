@@ -48,7 +48,12 @@ function loadEncrypted(): SettingsMap {
     const packed = readFileSync(SETTINGS_PATH, 'utf8')
     const json = safeStorage.decryptString(Buffer.from(packed, 'base64'))
     return JSON.parse(json) as SettingsMap
-  } catch {
+  } catch (e) {
+    // A corrupt/undecryptable settings.enc used to be ignored silently, so
+    // previously stored crawler credentials stopped working with no clue why.
+    console.error('[settings] settings.enc unreadable — stored keys ignored', {
+      error: (e as Error).message
+    })
     return {}
   }
 }

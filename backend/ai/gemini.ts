@@ -56,7 +56,12 @@ export async function generateImageBrief(topic: string): Promise<ImageBrief> {
   const first = await geminiText(buildImageBriefPrompt(cleanTopic))
   try {
     return parseImageBrief(first, cleanTopic)
-  } catch {
+  } catch (e) {
+    // The retry used to be silent: a run of unparseable replies (model
+    // regression) was invisible. Log the reason so its rate is observable.
+    console.warn('[ai gemini] image brief reply was unparseable; retrying once', {
+      error: (e as Error).message
+    })
     const retry = await geminiText(buildImageBriefPrompt(cleanTopic))
     return parseImageBrief(retry, cleanTopic)
   }

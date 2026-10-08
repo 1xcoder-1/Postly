@@ -112,9 +112,36 @@ function sanitizeTopics(raw: unknown): CrawlerTopic[] {
   return out
 }
 
+/**
+ * Emits one structured outcome line per crawler run so the main-process log
+ * names which source returned topics, which returned none, and which failed.
+ * A source that silently yields [] (bad output, timeout, missing interpreter,
+ * spawn error) is otherwise indistinguishable from one with nothing to report.
+ */
+function logCrawlerOutcome(
+  script: string,
+  startedAt: number,
+  topicCount: number,
+  reason?: string,
+  detail?: string
+): void {
+  const event: Record<string, unknown> = {
+    script,
+    topicCount,
+    durationMs: Date.now() - startedAt,
+    ok: !reason
+  }
+  if (reason) event.reason = reason
+  // Detail (stderr/output) may contain paths or scraped text — main log only.
+  if (detail) event.detail = detail.slice(0, 400)
+  if (reason) console.error('[crawler] source failed', event)
+  else console.log('[crawler] source completed', event)
+}
+
 /** Runs a Python crawler, returns sanitized topics. [] on any failure. */
 function runCrawler(script: string, args: string[] = [], timeoutMs = 20000): Promise<CrawlerTopic[]> {
   return new Promise((resolvePromise) => {
+    const startedAt = Date.now()
     let child: ReturnType<typeof spawn>
     try {
       child = spawn(PYTHON, [resolve(CRAWLERS_DIR, script), ...args], {
@@ -122,7 +149,8 @@ function runCrawler(script: string, args: string[] = [], timeoutMs = 20000): Pro
         cwd: CRAWLERS_DIR,
         env: crawlerEnv()
       })
-    } catch {
+    } catch (e) {
+      logCrawlerOutcome(script, startedAt, 0, 'spawn', (e as Error).message)
       resolvePromise([])
       return
     }
@@ -139,28 +167,34 @@ function runCrawler(script: string, args: string[] = [], timeoutMs = 20000): Pro
 
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
-      console.error(`[crawler ${script}] timed out after ${timeoutMs}ms`)
+      logCrawlerOutcome(script, startedAt, 0, 'timeout', `no output within ${timeoutMs}ms`)
       done([])
     }, timeoutMs)
 
     child.stdout?.on('data', (d) => (out += d.toString()))
     child.stderr?.on('data', (d) => (err += d.toString()))
     child.on('close', () => {
+      let topics: CrawlerTopic[]
       try {
-        done(sanitizeTopics(JSON.parse(out.trim() || '[]')))
+        topics = sanitizeTopics(JSON.parse(out.trim() || '[]'))
       } catch {
-        // err may contain paths — keep it in the main-process log only.
-        console.error(`[crawler ${script}] bad output:`, (err || out).slice(0, 400))
+        // err may contain paths — detail stays in the main-process log only.
+        logCrawlerOutcome(script, startedAt, 0, 'bad-output', err || out)
         done([])
+        return
       }
+      logCrawlerOutcome(script, startedAt, topics.length)
+      done(topics)
     })
     child.on('error', (e) => {
       if ((e as NodeJS.ErrnoException).code === 'ENOENT' && !pythonMissingLogged) {
         pythonMissingLogged = true
         console.error(
-          `[crawler] Python interpreter "${PYTHON}" not found. Install Python 3 or set PYTHON_BIN. Crawlers disabled.`
+          '[crawler] Python interpreter not found. Install Python 3 or set PYTHON_BIN. Crawlers disabled.',
+          { python: PYTHON }
         )
       }
+      logCrawlerOutcome(script, startedAt, 0, 'spawn-error', (e as Error).message)
       done([])
     })
   })
@@ -169,14 +203,17 @@ function runCrawler(script: string, args: string[] = [], timeoutMs = 20000): Pro
 /** Same as runCrawler but returns the raw parsed JSON (agent-reach prints an object). */
 function runCrawlerRaw(script: string, args: string[] = [], timeoutMs = 20000): Promise<unknown> {
   return new Promise((resolvePromise) => {
+    const startedAt = Date.now()
     let child: ReturnType<typeof spawn>
     try {
       child = spawn(PYTHON, [resolve(CRAWLERS_DIR, script), ...args], { cwd: CRAWLERS_DIR, env: crawlerEnv() })
-    } catch {
+    } catch (e) {
+      logCrawlerOutcome(script, startedAt, 0, 'spawn', (e as Error).message)
       resolvePromise(null)
       return
     }
     let out = ''
+    let err = ''
     let settled = false
     const done = (value: unknown) => {
       if (settled) return
@@ -186,17 +223,28 @@ function runCrawlerRaw(script: string, args: string[] = [], timeoutMs = 20000): 
     }
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
+      logCrawlerOutcome(script, startedAt, 0, 'timeout', `no output within ${timeoutMs}ms`)
       done(null)
     }, timeoutMs)
     child.stdout?.on('data', (d) => (out += d.toString()))
+    child.stderr?.on('data', (d) => (err += d.toString()))
     child.on('close', () => {
+      let parsed: unknown
       try {
-        done(JSON.parse(out.trim() || 'null'))
+        parsed = JSON.parse(out.trim() || 'null')
       } catch {
+        logCrawlerOutcome(script, startedAt, 0, 'bad-output', err || out)
         done(null)
+        return
       }
+      const rawTopics = (parsed as { topics?: unknown } | null)?.topics
+      logCrawlerOutcome(script, startedAt, Array.isArray(rawTopics) ? rawTopics.length : 0)
+      done(parsed)
     })
-    child.on('error', () => done(null))
+    child.on('error', (e) => {
+      logCrawlerOutcome(script, startedAt, 0, 'spawn-error', (e as Error).message)
+      done(null)
+    })
   })
 }
 

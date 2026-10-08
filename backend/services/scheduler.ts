@@ -32,10 +32,16 @@ export async function runSchedulerOnce(): Promise<number> {
 export function startScheduler(onMoved?: (count: number) => void): void {
   if (timer) return
   const tick = async () => {
-    const count = await runSchedulerOnce()
-    if (count > 0) {
-      console.log(`[scheduler] marked ${count} scheduled post(s) ready`)
-      onMoved?.(count)
+    try {
+      const count = await runSchedulerOnce()
+      if (count > 0) {
+        console.log('[scheduler] marked scheduled posts ready', { count })
+        onMoved?.(count)
+      }
+    } catch (e) {
+      // Without this, a failing pass surfaced only as a generic unhandled
+      // rejection with no indication that due posts are stuck in 'scheduled'.
+      console.error('[scheduler] pass failed', e)
     }
   }
   setTimeout(tick, 3_000)
