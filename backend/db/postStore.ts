@@ -22,7 +22,12 @@ function loadMemory() {
     memory = existsSync(FALLBACK_PATH)
       ? JSON.parse(readFileSync(FALLBACK_PATH, 'utf8'))
       : { posts: [], rejections: [] }
-  } catch {
+  } catch (e) {
+    // A corrupt/unreadable posts.json used to reset silently to empty, so every
+    // local draft vanished from the UI with nothing in the log to explain it.
+    console.error('[db] posts.json unreadable — starting with an empty local store', {
+      error: (e as Error).message
+    })
     memory = { posts: [], rejections: [] }
   }
   return memory!
